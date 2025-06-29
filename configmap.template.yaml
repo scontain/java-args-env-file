@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: app-config
+  name: java-cli-env-config
   namespace: {{NAMESPACE}}
 data:
   configs.yaml: |

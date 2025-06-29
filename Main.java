@@ -22,6 +22,17 @@ public class Main {
 
         // Read and print /config/secrets
         readAndPrintFile("/config/secrets", "Secrets File");
+
+        // Sleep for 1 hour
+        System.out.println("\n⏳ Sleeping for 1 hour to keep the container alive...");
+        try {
+            Thread.sleep(3600_000); // 1 hour = 3600000 ms
+        } catch (InterruptedException e) {
+            System.err.println("Sleep interrupted: " + e.getMessage());
+        }
+
+        System.out.println("✅ Done.");
+
     }
 
     private static void readAndPrintFile(String path, String label) {

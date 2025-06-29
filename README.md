@@ -17,3 +17,8 @@ The Java program:
 - Mount a ConfigMap to /config/configs.yaml.
 - Mount a Secret to /config/secrets.
 
+## Running the tutorial
+
+- `build.sh`: build the container image and the manifests. Run `build.sh --help` to learn how to customize this build step. 
+- `delpoy.sh`: deploys the manifests in the default namespace.
+- 

@@ -5,10 +5,9 @@ set -euo pipefail
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
 TAG="latest"
 PULLSECRET="sconeapps"
-DEPLOYMENT_TEMPLATE="deployment.template.yaml"
-DEPLOYMENT_OUTPUT="deployment.yaml"
+NAMESPACE=""
+NO_CACHE=false
 
-# Regex patterns
 REPO_REGEX="^([a-z0-9]+([._-]?[a-z0-9]+)*/?)+$"
 TAG_REGEX='^[A-Za-z0-9_.-]{1,128}$'
 
@@ -16,24 +15,23 @@ print_help() {
   cat <<EOF
 Usage: $0 [OPTIONS]
 
-Build and push the Docker image, and generate deployment.yaml.
+Build and push Docker image, and generate Kubernetes manifests from templates.
 
 Options:
   --repo <repo>         Docker repository (default: $REPO)
   --tag <tag>           Docker image tag (default: $TAG)
   --pullsecret <name>   Kubernetes imagePullSecret name (default: $PULLSECRET)
-  --no-cache            Disable Docker build cache
-  --help                Show this help message and exit
+  --namespace, -n <ns>  Kubernetes namespace to inject into manifests
+  --no-cache            Disable Docker build cache (force image rebuild)
+  --help                Show this help message
 
 Examples:
   $0
-  $0 --repo ghcr.io/me/myapp --tag v1.2.3 --pullsecret my-secret
+  $0 --repo ghcr.io/me/myapp --tag v1.2.3 --pullsecret mysecret -n devspace
 EOF
 }
 
-NO_CACHE=false
-
-# Parse args
+# Parse CLI arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)
@@ -46,6 +44,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --pullsecret)
       PULLSECRET="$2"
+      shift 2
+      ;;
+    --namespace|-n)
+      NAMESPACE="$2"
       shift 2
       ;;
     --no-cache)
@@ -64,31 +66,37 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Validate input
+# Validate repo and tag
 [[ "$REPO" =~ $REPO_REGEX ]] || { echo "❌ Invalid repo: $REPO"; exit 1; }
 [[ "$TAG" =~ $TAG_REGEX ]]   || { echo "❌ Invalid tag: $TAG"; exit 1; }
 
-# Check template file
-[[ -f "$DEPLOYMENT_TEMPLATE" ]] || {
-  echo "❌ Template not found: $DEPLOYMENT_TEMPLATE"
-  exit 1
-}
-
-# Build image
 echo "📦 Building Docker image: $REPO:$TAG"
 BUILD_ARGS=()
 $NO_CACHE && BUILD_ARGS+=(--no-cache --pull)
 docker build "${BUILD_ARGS[@]}" -t "${REPO}:${TAG}" .
 
-# Push
 echo "🚀 Pushing image to $REPO:$TAG"
 docker push "${REPO}:${TAG}"
 
-# Generate deployment manifest
-echo "🛠️ Generating $DEPLOYMENT_OUTPUT"
-sed -e "s|{{REPO}}|${REPO}|g" \
-    -e "s|{{TAG}}|${TAG}|g" \
-    -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
-    "$DEPLOYMENT_TEMPLATE" > "$DEPLOYMENT_OUTPUT"
+echo "🛠️ Generating Kubernetes manifests"
+for template in *.template.yaml; do
+  output="${template%.template.yaml}.yaml"
+  echo "🔧 Creating $output"
 
-echo "✅ Done. Generated $DEPLOYMENT_OUTPUT with pull secret: $PULLSECRET"
+  if [[ -n "$NAMESPACE" ]]; then
+    sed -e "s|{{REPO}}|${REPO}|g" \
+        -e "s|{{TAG}}|${TAG}|g" \
+        -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
+        -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
+        "$template" > "$output"
+  else
+    sed -e "s|{{REPO}}|${REPO}|g" \
+        -e "s|{{TAG}}|${TAG}|g" \
+        -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
+        -e "/namespace: {{NAMESPACE}}/d" \
+        "$template" > "$output"
+  fi
+done
+
+echo "✅ All manifests generated"
+[[ -n "$NAMESPACE" ]] && echo "📂 Namespace injected: $NAMESPACE"
