@@ -1,29 +1,36 @@
-apiVersion: batch/v1
-kind: Job
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: java-cli-env-reader
   namespace: {{NAMESPACE}}
 spec:
-  backoffLimit: 30
+  replicas: 1
+  selector:
+    matchLabels:
+      app: java-cli-env-reader
   template:
+    metadata:
+      labels:
+        app: java-cli-env-reader
     spec:
-      restartPolicy: OnFailure
       containers:
         - name: java-cli-env
           image: {{REPO}}:{{TAG}}
           imagePullPolicy: Always
-          args: ["arg1", "arg2s"]
+          args: ["arg1", "arg2"]
           volumeMounts:
             - name: config-volume
-              mountPath: /config
-              readOnly: true
-      volumes:
-        - name: config-volume
-          projected:
-            sources:
-              - configMap:
-                  name: java-cli-env-config
-              - secret:
-                  name: java-cli-env-secret
+              mountPath: /config/configs.yaml
+              subPath: configs.yaml
+            - name: secret-volume
+              mountPath: /config/secrets
+              subPath: secrets
       imagePullSecrets:
         - name: {{PULLSECRET}}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: java-cli-env-config
+        - name: secret-volume
+          secret:
+            secretName: java-cli-env-secret

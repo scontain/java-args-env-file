@@ -21,4 +21,9 @@ The Java program:
 
 - `build.sh`: build the container image and the manifests. Run `build.sh --help` to learn how to customize this build step. 
 - `delpoy.sh`: deploys the manifests in the default namespace.
-- 
+- `show_logs.sh`: show the log of the pod
+- `cleanup.sh`:  removes all resources
+
+## Showing the secrets
+
+We can decode the Kubernetes secret with the help of script `decode_secret.sh`.

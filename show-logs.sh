@@ -48,7 +48,7 @@ KUBECTL="kubectl"
 echo "🔍 Looking for pod from job: $JOB_NAME..."
 while true; do
   POD_NAME=$($KUBECTL get pods \
-    --selector="job-name=$JOB_NAME" \
+    --selector="app=$JOB_NAME" \
     --output=jsonpath="{.items[0].metadata.name}" 2>/dev/null || true)
 
   if [[ -n "$POD_NAME" ]]; then
