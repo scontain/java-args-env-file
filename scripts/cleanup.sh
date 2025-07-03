@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 NAMESPACE=""
 CONTEXT=""
@@ -26,23 +27,23 @@ EOF
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --namespace|-n)
-      NAMESPACE="$2"
-      shift 2
-      ;;
-    --context)
-      CONTEXT="$2"
-      shift 2
-      ;;
-    --help|-h)
-      print_help
-      exit 0
-      ;;
-    *)
-      echo "❌ Unknown option: $1"
-      echo "Run with --help for usage."
-      exit 1
-      ;;
+  --namespace | -n)
+    NAMESPACE="$2"
+    shift 2
+    ;;
+  --context)
+    CONTEXT="$2"
+    shift 2
+    ;;
+  --help | -h)
+    print_help
+    exit 0
+    ;;
+  *)
+    echo "❌ Unknown option: $1"
+    echo "Run with --help for usage."
+    exit 1
+    ;;
   esac
 done
 
@@ -52,15 +53,8 @@ KUBECTL_CMD="kubectl"
 [[ -n "$NAMESPACE" ]] && KUBECTL_CMD+=" --namespace=$NAMESPACE"
 
 # Clean up all generated .yaml files
-for file in *.yaml; do
-  if [[ "$file" =~ \.template\.yaml$ ]]; then
-    continue
-  fi
-  echo "🗑️ Deleting resources from $file"
-  $KUBECTL_CMD delete -f "$file" --ignore-not-found
-done
+rm -rf $SCRIPT_DIR/../generated
 
 echo "✅ Cleanup complete"
 [[ -n "$NAMESPACE" ]] && echo "🔍 Namespace used: $NAMESPACE"
 [[ -n "$CONTEXT" ]] && echo "🧭 Context used: $CONTEXT"
-

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 # Default context (optional: leave empty to use current context)
 KUBECTL_CONTEXT=""
@@ -23,24 +24,25 @@ EOF
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --context)
-      KUBECTL_CONTEXT="$2"
-      shift 2
-      ;;
-    --help|-h)
-      print_help
-      exit 0
-      ;;
-    *)
-      echo "❌ Unknown option: $1"
-      echo "Run with --help for usage."
-      exit 1
-      ;;
+  --context)
+    KUBECTL_CONTEXT="$2"
+    shift 2
+    ;;
+  --help | -h)
+    print_help
+    exit 0
+    ;;
+  *)
+    echo "❌ Unknown option: $1"
+    echo "Run with --help for usage."
+    exit 1
+    ;;
   esac
 done
 
+required_files=($SCRIPT_DIR/../generated/configmap.yaml $SCRIPT_DIR/../generated/secret.yaml $SCRIPT_DIR/../generated/deployment.yaml)
 # Check required files
-for file in configmap.yaml secret.yaml deployment.yaml; do
+for file in ${required_files[@]}; do
   if [[ ! -f "$file" ]]; then
     echo "❌ Required manifest file not found: $file"
     exit 1
@@ -55,8 +57,8 @@ fi
 
 # Apply manifests
 echo "🚀 Deploying resources using context: ${KUBECTL_CONTEXT:-<current>}"
-$KUBECTL apply -f configmap.yaml
-$KUBECTL apply -f secret.yaml
-$KUBECTL apply -f deployment.yaml
+$KUBECTL apply -f $SCRIPT_DIR/../generated/configmap.yaml
+$KUBECTL apply -f $SCRIPT_DIR/../generated/secret.yaml
+$KUBECTL apply -f $SCRIPT_DIR/../generated/deployment.yaml
 
 echo "✅ Deployment complete."
