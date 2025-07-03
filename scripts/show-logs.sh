@@ -24,19 +24,19 @@ EOF
 # Parse CLI arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --namespace|-n)
-      NAMESPACE="$2"
-      shift 2
-      ;;
-    --help|-h)
-      print_help
-      exit 0
-      ;;
-    *)
-      echo "❌ Unknown argument: $1"
-      print_help
-      exit 1
-      ;;
+  --namespace | -n)
+    NAMESPACE="$2"
+    shift 2
+    ;;
+  --help | -h)
+    print_help
+    exit 0
+    ;;
+  *)
+    echo "❌ Unknown argument: $1"
+    print_help
+    exit 1
+    ;;
   esac
 done
 

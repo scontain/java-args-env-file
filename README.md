@@ -19,8 +19,10 @@ The Java program:
 
 ## Running the tutorial
 
+The following scrips that are found in the `scripts` directory:
+
 - `build.sh`: build the container image and the manifests. Run `build.sh --help` to learn how to customize this build step. 
-- `delpoy.sh`: deploys the manifests in the default namespace.
+- `deploy.sh`: deploys the manifests in the default namespace.
 - `show_logs.sh`: show the log of the pod
 - `cleanup.sh`:  removes all resources
 
