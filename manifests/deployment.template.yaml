@@ -17,6 +17,7 @@ spec:
         - name: java-cli-env
           image: {{REPO}}:{{TAG}}
           imagePullPolicy: Always
+          command: ["/opt/java/openjdk/bin/java", "Main"]
           args: ["arg1", "arg2"]
           volumeMounts:
             - name: config-volume
