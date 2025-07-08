@@ -1,0 +1,35 @@
+apiVersion: scone.cloud/v1
+kind: Register
+metadata:
+  name: arg-env             # will become ./petclinic.json
+spec:
+  protected_image:    {{REPO}}:{{TAG}}
+  unprotected_image:        {{REPO}}:{{TAG}}
+  enforce:           ["/opt/java/openjdk/bin/java"]
+---
+apiVersion: scone.cloud/v1
+kind: Apply
+metadata:
+  name: arg-env
+  namespace: java-env-var
+spec:
+  # Inline‑selection: pick *only* the Deployment named “flask-server”
+  file:
+    - name: java-cli-env-reader
+    - name: java-cli-env-secret
+    - name: java-cli-env-config
+
+  output_manifest_file: "./manifest.cleaned.yaml"
+  output_session_file: "./manifest.session.yaml"
+  cas_address:
+    address: cas.scone-system
+  # attest_cas omitted → defaults to 127.0.0.1:8081
+  manifest_env:
+    - { name: SCONE_VERSION,  value: "1" }
+    - { name: SCONE_LOG,      value: "FATAL" }
+    - { name: SCONE_HEAP,      value: "4G" }
+    - { name: MANIFEST_ENV, value: "UNPROTECTED" }
+  session_env:
+    - { name: LD_LIBRARY_PATH, value: /opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib }
+    - { name: SESSION_ENV, value: "CONFIDENTIAL" }
+  permissive: true      
