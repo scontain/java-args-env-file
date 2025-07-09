@@ -8,7 +8,7 @@ PULLSECRET="sconeapps"
 NAMESPACE=""
 NO_CACHE=false
 BUNDLE_MANIFESTS=true
-K8S_SCONE_PATH=""
+K8S_SCONE_PATH="${HOME}/k8s-scone"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -33,7 +33,7 @@ Options:
   --namespace, -n <ns>      Kubernetes namespace to inject into manifests
   --no-cache                Disable Docker build cache (force image rebuild)
   --bundle-manifests        Bundle the Manifests into one yaml file
-  --k8s-scone-path <path>   Path where to clone and build k8s-scone repo
+  --k8s-scone-path <path>   Path where to clone and build k8s-scone repo (default: $K8S_SCONE_PATH)
   --help                    Show this help message
 
 Examples:
@@ -138,9 +138,10 @@ check_prerequisites() {
   images=(
     "registry.scontain.com/scone.cloud/sconecli"
     "registry.scontain.com/scone.cloud/sconecli:5.9.0-rc.11"
-    "registry.scontain.com/cicd/base/runtime-ubuntu20.04"
-    "registry.scontain.com/cicd/base/runtime-ubuntu20.04:5.10.0-rc.1"
     "registry.scontain.com/public-images/glibc:2.35-v4"
+    "registry.scontain.com/public-images/glibc:2.39-v3"
+    "registry.scontain.com/cicd/base/runtime-ubuntu20.04:5.10.0-rc.1"
+    "registry.scontain.com/scone.cloud/sconecli:5.9.0-rc.11"
   )
   for image in "${images[@]}"; do
     if ! docker pull --quiet "$image" &>/dev/null; then
@@ -158,16 +159,16 @@ apply_template_params() {
   local local_output=$2
   if [[ -n "$NAMESPACE" ]]; then
     sed -e "s|{{REPO}}|${REPO}|g" \
-      -e "s|{{TAG}}|${TAG}|g" \
-      -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
-      -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
-      "$local_filepath" >"$local_output"
+        -e "s|{{TAG}}|${TAG}|g" \
+        -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
+        -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
+        "$local_filepath" >"$local_output"
   else
     sed -e "s|{{REPO}}|${REPO}|g" \
-      -e "s|{{TAG}}|${TAG}|g" \
-      -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
-      -e "/namespace: {{NAMESPACE}}/d" \
-      "$local_filepath" >"$local_output"
+        -e "s|{{TAG}}|${TAG}|g" \
+        -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
+        -e "/namespace: {{NAMESPACE}}/d" \
+        "$local_filepath" >"$local_output"
   fi
 }
 
@@ -188,19 +189,17 @@ done
 
 check_prerequisites
 
-# Clone and build k8s-scone repo if path is provided
-if [[ -n "$K8S_SCONE_PATH" ]]; then
-  if [ ! -d "$K8S_SCONE_PATH" ]; then
-    echo "📥 Cloning k8s-scone repo into $K8S_SCONE_PATH"
-    git clone https://github.com/scontain/k8s-scone.git "$K8S_SCONE_PATH"
-    cd "$K8S_SCONE_PATH"
-    git fetch
-    git checkout amand1o/pet-clinic
-    cargo build
-    cd - >/dev/null
-  else
-    echo "✅ Using existing k8s-scone repo at $K8S_SCONE_PATH"
-  fi
+# Clone and build k8s-scone repo if needed
+if [ ! -d "$K8S_SCONE_PATH" ]; then
+  echo "📥 Cloning k8s-scone repo into $K8S_SCONE_PATH"
+  git clone https://github.com/scontain/k8s-scone.git "$K8S_SCONE_PATH"
+  cd "$K8S_SCONE_PATH"
+  git fetch
+  git checkout amand1o/pet-clinic
+  cargo build
+  cd - >/dev/null
+else
+  echo "✅ Using existing k8s-scone repo at $K8S_SCONE_PATH"
 fi
 
 # Validate repo and tag
@@ -234,11 +233,28 @@ generate_from_templates() {
 generate_from_templates "$SCRIPT_DIR/../manifests"
 generate_from_templates "$SCRIPT_DIR/../confidential"
 
+SETUP_RENDERED="$OUTPUT_DIR/manifest.yaml"
+IMAGE_NAME="${REPO##*/}"
+
 if [ "$BUNDLE_MANIFESTS" = true ]; then
-  echo "📦 Bundling ALL manifests into $OUTPUT_DIR/manifest.yaml"
-  yq ea 'select(fileIndex >= 0)' $(find "$OUTPUT_DIR" -type f -name "*.yaml" ! -name "*.template.yaml") >"$OUTPUT_DIR/manifest.yaml"
+  echo "📦 Bundling ALL manifests into $SETUP_RENDERED"
+  yq ea 'select(fileIndex >= 0)' $(find "$OUTPUT_DIR" -type f -name "*.yaml" ! -name "*.template.yaml") >"$SETUP_RENDERED"
 fi
 
 echo "✅ All manifests generated"
 [[ -n "$NAMESPACE" ]] && echo "📂 Namespace injected: $NAMESPACE"
 
+# 🛡️ Use k8s-scone to process the manifest and push the confidential image
+if [[ -x "$K8S_SCONE_PATH/target/debug/k8s-scone" ]]; then
+  echo "🛡️ [CONFIDENTIAL MODE] Processing manifest with k8s-scone"
+  "$K8S_SCONE_PATH/target/debug/k8s-scone" from -y "$SETUP_RENDERED"
+
+  MANIFEST_RENDERED="manifest.cleaned.yaml"
+  if [[ -f "$MANIFEST_RENDERED" ]]; then
+    echo "🛡️ [CONFIDENTIAL MODE] Pushing confidential image: ${REPO}:${TAG}-scone"
+    docker push "${REPO}:${TAG}-scone"
+  else
+    echo -e "${RED}❌ Error: Expected output '$MANIFEST_RENDERED' not found${NC}"
+    exit 1
+  fi
+fi
