@@ -4,42 +4,62 @@ set -euo pipefail
 # Defaults
 REPO="docker.io/dandax123/java-cli-env-reader"
 TAG="latest"
-PULLSECRET="sconeapps"
-NAMESPACE=""
-NO_CACHE=false
-BUNDLE_MANIFESTS=true
 K8S_SCONE_PATH="${HOME}/k8s-scone"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+GENERATED_DIR="$SCRIPT_DIR/../generated"
+MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
+MANIFESTS_DIR="$SCRIPT_DIR/../manifests"
+CONFIDENTIAL_DIR="$SCRIPT_DIR/../confidential"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-REPO_REGEX="^([a-z0-9]+([._-]?[a-z0-9]+)*/?)+$"
-TAG_REGEX='^[A-Za-z0-9_.-]{1,128}$'
-
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-
 print_help() {
   cat <<EOF
 Usage: $0 [OPTIONS]
 
-Build and push Docker image, and generate Kubernetes manifests from templates.
+Confidentialize previously built Docker image and generated Kubernetes manifests.
 
 Options:
-  --repo <repo>             Docker repository (default: $REPO)
+  --repo <repo>             Docker image name (default: $REPO)
   --tag <tag>               Docker image tag (default: $TAG)
-  --pullsecret <name>       Kubernetes imagePullSecret name (default: $PULLSECRET)
-  --namespace, -n <ns>      Kubernetes namespace to inject into manifests
-  --no-cache                Disable Docker build cache (force image rebuild)
-  --bundle-manifests        Bundle the Manifests into one yaml file
-  --k8s-scone-path <path>   Path where to clone and build k8s-scone repo (default: $K8S_SCONE_PATH)
+  --k8s-scone-path <path>   Local path to k8s-scone repo (default: $K8S_SCONE_PATH)
   --help                    Show this help message
 
-Examples:
-  $0
-  $0 --repo ghcr.io/me/myapp --tag v1.2.3 --pullsecret mysecret -n devspace
+⚠️  NOTE: You must run the first script BEFORE this to build and generate manifests.
 EOF
+}
+
+substitute_template() {
+  local input=$1
+  local output=$2
+  if [[ -n "${NAMESPACE:-}" ]]; then
+    sed -e "s|{{REPO}}|${REPO}|g" \
+        -e "s|{{TAG}}|${TAG}|g" \
+        -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
+        -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
+        "$input" > "$output"
+  else
+    sed -e "s|{{REPO}}|${REPO}|g" \
+        -e "s|{{TAG}}|${TAG}|g" \
+        -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
+        -e "/namespace: {{NAMESPACE}}/d" \
+        "$input" > "$output"
+  fi
+}
+
+generate_confidential_manifests() {
+  echo -e "${YELLOW}🔐 Generating confidential manifests...${NC}"
+  for filepath in "$CONFIDENTIAL_DIR"/*.template.yaml; do
+    [ -e "$filepath" ] || continue
+    filename=$(basename -- "$filepath")
+    template="${filename%.template.yaml}"
+    output="$GENERATED_DIR/$template.yaml"
+    echo "🔧 Rendering confidential manifest: $output"
+    substitute_template "$filepath" "$output"
+  done
 }
 
 check_prerequisites() {
@@ -153,45 +173,41 @@ check_prerequisites() {
   echo -e "${GREEN}✔️ All required container images are available.${NC}"
 }
 
-
-apply_template_params() {
-  local local_filepath=$1
-  local local_output=$2
-  if [[ -n "$NAMESPACE" ]]; then
-    sed -e "s|{{REPO}}|${REPO}|g" \
-        -e "s|{{TAG}}|${TAG}|g" \
-        -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
-        -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
-        "$local_filepath" >"$local_output"
-  else
-    sed -e "s|{{REPO}}|${REPO}|g" \
-        -e "s|{{TAG}}|${TAG}|g" \
-        -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
-        -e "/namespace: {{NAMESPACE}}/d" \
-        "$local_filepath" >"$local_output"
-  fi
-}
-
 # Parse CLI arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --tag) TAG="$2"; shift 2 ;;
-    --pullsecret) PULLSECRET="$2"; shift 2 ;;
     --namespace | -n) NAMESPACE="$2"; shift 2 ;;
-    --no-cache) NO_CACHE=true; shift ;;
-    --bundle-manifests) BUNDLE_MANIFESTS=true; shift ;;
+    --pullsecret) PULLSECRET="$2"; shift 2 ;;
     --k8s-scone-path) K8S_SCONE_PATH="$2"; shift 2 ;;
     --help | -h) print_help; exit 0 ;;
-    *) echo "❌ Unknown option: $1"; echo "Run with --help for usage."; exit 1 ;;
+    *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac
 done
 
-check_prerequisites
+# Ensure base manifests exist
+if [[ ! -d "$GENERATED_DIR" ]]; then
+  echo -e "${RED}❌ Missing generated folder: $GENERATED_DIR${NC}"
+  echo "💡 Run the base script first to build and generate manifests."
+  exit 1
+fi
 
-# Clone and build k8s-scone repo if needed
-if [ ! -d "$K8S_SCONE_PATH" ]; then
-  echo "📥 Cloning k8s-scone repo into $K8S_SCONE_PATH"
+if [[ ! -f "$MANIFEST_FILE" ]]; then
+  echo -e "${RED}❌ Missing manifest file: $MANIFEST_FILE${NC}"
+  echo "💡 Run the base script first to generate manifest.yaml."
+  exit 1
+fi
+
+check_prerequisites
+generate_confidential_manifests
+
+echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
+yq ea 'select(fileIndex >= 0)' "$GENERATED_DIR"/*.yaml > "$MANIFEST_FILE"
+
+# Ensure k8s-scone is built
+if [[ ! -x "$K8S_SCONE_PATH/target/debug/k8s-scone" ]]; then
+  echo -e "${YELLOW}📥 Cloning and building k8s-scone...${NC}"
   git clone https://github.com/scontain/k8s-scone.git "$K8S_SCONE_PATH"
   cd "$K8S_SCONE_PATH"
   git fetch
@@ -199,62 +215,23 @@ if [ ! -d "$K8S_SCONE_PATH" ]; then
   cargo build
   cd - >/dev/null
 else
-  echo "✅ Using existing k8s-scone repo at $K8S_SCONE_PATH"
+  echo -e "${GREEN}✅ Using k8s-scone at $K8S_SCONE_PATH${NC}"
 fi
 
-# Validate repo and tag
-[[ "$REPO" =~ $REPO_REGEX ]] || { echo "❌ Invalid repo: $REPO"; exit 1; }
-[[ "$TAG" =~ $TAG_REGEX ]] || { echo "❌ Invalid tag: $TAG"; exit 1; }
+# Run k8s-scone
+echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
+"$K8S_SCONE_PATH/target/debug/k8s-scone" from -y "$MANIFEST_FILE"
 
-echo "📦 Building Docker image: $REPO:$TAG"
-BUILD_ARGS=()
-$NO_CACHE && BUILD_ARGS+=(--no-cache --pull)
-docker build "${BUILD_ARGS[@]}" -t "${REPO}:${TAG}" -f "$SCRIPT_DIR/../Dockerfile" "$SCRIPT_DIR/../"
-
-echo "🚀 Pushing image to $REPO:$TAG"
-docker push "${REPO}:${TAG}"
-
-echo "🛠️ Generating Kubernetes manifests"
-OUTPUT_DIR="$SCRIPT_DIR/../generated"
-mkdir -p "$OUTPUT_DIR"
-
-generate_from_templates() {
-  local input_folder=$1
-  echo "📁 Processing folder: $(basename "$input_folder")"
-  for filepath in "$input_folder"/*.template.yaml; do
-    filename=$(basename -- "$filepath")
-    template="${filename%.template.yaml}"
-    output="$OUTPUT_DIR/$template.yaml"
-    echo "🔧 Creating $output for $template"
-    apply_template_params "$filepath" "$output"
-  done
-}
-
-generate_from_templates "$SCRIPT_DIR/../manifests"
-generate_from_templates "$SCRIPT_DIR/../confidential"
-
-SETUP_RENDERED="$OUTPUT_DIR/manifest.yaml"
-IMAGE_NAME="${REPO##*/}"
-
-if [ "$BUNDLE_MANIFESTS" = true ]; then
-  echo "📦 Bundling ALL manifests into $SETUP_RENDERED"
-  yq ea 'select(fileIndex >= 0)' $(find "$OUTPUT_DIR" -type f -name "*.yaml" ! -name "*.template.yaml") >"$SETUP_RENDERED"
+MANIFEST_RENDERED="manifest.cleaned.yaml"
+if [[ -f "$MANIFEST_RENDERED" ]]; then
+  echo -e "${GREEN}✅ Confidential manifest: $MANIFEST_RENDERED${NC}"
+else
+  echo -e "${RED}❌ Error: $MANIFEST_RENDERED not created${NC}"
+  exit 1
 fi
 
-echo "✅ All manifests generated"
-[[ -n "$NAMESPACE" ]] && echo "📂 Namespace injected: $NAMESPACE"
+# Push confidential image
+echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
+docker push "${REPO}:${TAG}-scone"
 
-# 🛡️ Use k8s-scone to process the manifest and push the confidential image
-if [[ -x "$K8S_SCONE_PATH/target/debug/k8s-scone" ]]; then
-  echo "🛡️ [CONFIDENTIAL MODE] Processing manifest with k8s-scone"
-  "$K8S_SCONE_PATH/target/debug/k8s-scone" from -y "$SETUP_RENDERED"
-
-  MANIFEST_RENDERED="manifest.cleaned.yaml"
-  if [[ -f "$MANIFEST_RENDERED" ]]; then
-    echo "🛡️ [CONFIDENTIAL MODE] Pushing confidential image: ${REPO}:${TAG}-scone"
-    docker push "${REPO}:${TAG}-scone"
-  else
-    echo -e "${RED}❌ Error: Expected output '$MANIFEST_RENDERED' not found${NC}"
-    exit 1
-  fi
-fi
+echo -e "${GREEN}🎉 Confidentialization completed successfully.${NC}"
