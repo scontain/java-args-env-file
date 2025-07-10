@@ -4,14 +4,14 @@ metadata:
   name: arg-env             # will become ./petclinic.json
 spec:
   protected_image:    {{REPO}}:{{TAG}}
-  unprotected_image:        {{REPO}}:{{TAG}}
-  enforce:           ["/opt/java/openjdk/bin/java"]
+  unprotected_image:        {{REPO}}:{{TAG}} # SGX
+  enforce:           ["/opt/java/openjdk/bin/java"] # SGX
+  #tdx: true # TDX
 ---
 apiVersion: scone.cloud/v1
 kind: Apply
 metadata:
   name: arg-env
-  namespace: java-env-var
 spec:
   # Inline‑selection: pick *only* the Deployment named “flask-server”
   file:
@@ -19,8 +19,8 @@ spec:
     - name: java-cli-env-secret
     - name: java-cli-env-config
 
-  output_manifest_file: "./manifest.cleaned.yaml"
-  output_session_file: "./manifest.session.yaml"
+  output_manifest_file: "./generated/manifest.cleaned.yaml"
+  output_session_file: "./generated/manifest.session.yaml"
   cas_address:
     address: cas.scone-system
   # attest_cas omitted → defaults to 127.0.0.1:8081
@@ -28,8 +28,11 @@ spec:
     - { name: SCONE_VERSION,  value: "1" }
     - { name: SCONE_LOG,      value: "FATAL" }
     - { name: SCONE_HEAP,      value: "4G" }
-    - { name: MANIFEST_ENV, value: "UNPROTECTED" }
+    #- { name: SCONE_CAS_ADDR, value: {{CLUSTER_ADDR}}} # TDX
   session_env:
     - { name: LD_LIBRARY_PATH, value: /opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib }
-    - { name: SESSION_ENV, value: "CONFIDENTIAL" }
-  permissive: true      
+  permissive: true 
+  #tdx: true # TDX
+  #split: true # TDX 
+  #kata-config-path: "./confidential/initidata.yaml" # TDX
+

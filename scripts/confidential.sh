@@ -10,6 +10,7 @@ GENERATED_DIR="$SCRIPT_DIR/../generated"
 MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
 MANIFESTS_DIR="$SCRIPT_DIR/../manifests"
 CONFIDENTIAL_DIR="$SCRIPT_DIR/../confidential"
+CLUSTER_ADDR=127.0.0.1
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -26,6 +27,7 @@ Options:
   --repo <repo>             Docker image name (default: $REPO)
   --tag <tag>               Docker image tag (default: $TAG)
   --k8s-scone-path <path>   Local path to k8s-scone repo (default: $K8S_SCONE_PATH)
+  --cluster-addr <addr>     Address to remote connect to the cas (default: $CLUSTER_ADDR)
   --help                    Show this help message
 
 ⚠️  NOTE: You must run the first script BEFORE this to build and generate manifests.
@@ -40,12 +42,14 @@ substitute_template() {
         -e "s|{{TAG}}|${TAG}|g" \
         -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
         -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
+        -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g" \
         "$input" > "$output"
   else
     sed -e "s|{{REPO}}|${REPO}|g" \
         -e "s|{{TAG}}|${TAG}|g" \
         -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
         -e "/namespace: {{NAMESPACE}}/d" \
+        -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g" \
         "$input" > "$output"
   fi
 }
@@ -203,7 +207,7 @@ check_prerequisites
 generate_confidential_manifests
 
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
-yq ea 'select(fileIndex >= 0)' "$GENERATED_DIR"/*.yaml > "$MANIFEST_FILE"
+yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*') > "$MANIFEST_FILE"
 
 # Ensure k8s-scone is built
 if [[ ! -x "$K8S_SCONE_PATH/target/debug/k8s-scone" ]]; then
@@ -222,7 +226,7 @@ fi
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
 "$K8S_SCONE_PATH/target/debug/k8s-scone" from -y "$MANIFEST_FILE"
 
-MANIFEST_RENDERED="manifest.cleaned.yaml"
+MANIFEST_RENDERED="generated/manifest.cleaned.yaml"
 if [[ -f "$MANIFEST_RENDERED" ]]; then
   echo -e "${GREEN}✅ Confidential manifest: $MANIFEST_RENDERED${NC}"
 else
