@@ -22,7 +22,7 @@ spec:
   output_manifest_file: "./generated/manifest.cleaned.yaml"
   output_session_file: "./generated/manifest.session.yaml"
   cas_address:
-    address: cas.scone-system
+    address: {{CAS_ADDR}} # default: cas.default
   # attest_cas omitted → defaults to 127.0.0.1:8081
   manifest_env:
     - { name: SCONE_VERSION,  value: "1" }
