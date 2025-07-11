@@ -10,8 +10,9 @@ GENERATED_DIR="$SCRIPT_DIR/../generated"
 MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
 MANIFESTS_DIR="$SCRIPT_DIR/../manifests"
 CONFIDENTIAL_DIR="$SCRIPT_DIR/../confidential"
-CLUSTER_ADDR=127.0.0.1
+CLUSTER_ADDR="127.0.0.1"
 CAS_ADDR="cas.default"
+CVM_MODE=false
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -27,10 +28,13 @@ Confidentialize previously built Docker image and generated Kubernetes manifests
 Options:
   --repo <repo>             Docker image name (default: $REPO)
   --tag <tag>               Docker image tag (default: $TAG)
+  --namespace | -n <ns>     Kubernetes namespace to use in templates
+  --pullsecret <name>       Kubernetes pull secret name (default: sconeapps)
   --k8s-scone-path <path>   Local path to k8s-scone repo (default: $K8S_SCONE_PATH)
-  --cluster-addr <addr>     Address to remote connect to the cas (default: $CLUSTER_ADDR)
-  --cas-addr <name.ns>       CAS service to use (default: $CAS_ADDR)
-  --help                    Show this help message
+  --cas-addr <name.ns>      CAS service to use (default: cas.default)
+  --cluster-addr <addr>     Address to remote connect to the CAS (default: $CLUSTER_ADDR)
+  --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
+  --help | -h               Show this help message
 
 ⚠️  NOTE: You must run the first script BEFORE this to build and generate manifests.
 EOF
@@ -39,24 +43,37 @@ EOF
 substitute_template() {
   local input=$1
   local output=$2
+
+  local sed_expr=(
+    -e "s|{{REPO}}|${REPO}|g"
+    -e "s|{{TAG}}|${TAG}|g"
+    -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g"
+    -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g"
+    -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g"
+  )
+
   if [[ -n "${NAMESPACE:-}" ]]; then
-    sed -e "s|{{REPO}}|${REPO}|g" \
-        -e "s|{{TAG}}|${TAG}|g" \
-        -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
-        -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
-        -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g" \
-        -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g" \
-        "$input" > "$output"
+    sed_expr+=(-e "s|{{NAMESPACE}}|${NAMESPACE}|g")
   else
-    sed -e "s|{{REPO}}|${REPO}|g" \
-        -e "s|{{TAG}}|${TAG}|g" \
-        -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
-        -e "/namespace: {{NAMESPACE}}/d" \
-        -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g" \
-        -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g" \
-        "$input" > "$output"
+    sed_expr+=(-e "/namespace: {{NAMESPACE}}/d")
   fi
+
+  if $CVM_MODE; then
+    # Delete only the markers, keep the lines inside the block
+    sed_expr+=(
+      -e "/{{IF_CVM}}/d"
+      -e "/{{END_IF}}/d"
+    )
+  else
+    # Remove entire blocks between markers (inclusive)
+    sed_expr+=(
+      -e "/{{IF_CVM}}/,/{{END_IF}}/d"
+    )
+  fi
+
+  sed "${sed_expr[@]}" "$input" > "$output"
 }
+
 
 generate_confidential_manifests() {
   echo -e "${YELLOW}🔐 Generating confidential manifests...${NC}"
@@ -73,12 +90,10 @@ generate_confidential_manifests() {
 check_prerequisites() {
   echo -e "${YELLOW}Checking prerequisites...${NC}"
 
-  # Helper function for checking command presence
   check_command() {
     command -v "$1" &>/dev/null
   }
 
-  # Install gcc-multilib if missing
   if ! dpkg-query -W -f='${Status}' gcc-multilib 2>/dev/null | grep "ok installed" &>/dev/null; then
     echo "📥 Installing gcc-multilib..."
     sudo apt update
@@ -87,7 +102,6 @@ check_prerequisites() {
     echo "✔️ gcc-multilib is already installed."
   fi
 
-  # Check Rust compiler
   if ! check_command rustc; then
     echo -e "${RED}❌ Rust is not installed. Please install it from https://rustup.rs/${NC}"
     exit 1
@@ -95,7 +109,6 @@ check_prerequisites() {
     echo "✔️ Rust is already installed."
   fi
 
-  # Check Cosign, install if missing
   if ! check_command cosign; then
     echo "📥 Installing Cosign..."
     curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
@@ -105,7 +118,6 @@ check_prerequisites() {
     echo "✔️ Cosign is already installed."
   fi
 
-  # Check Docker
   if ! check_command docker; then
     echo -e "${RED}❌ Docker is not installed. Please install it from https://docs.docker.com/engine/install/ubuntu/${NC}"
     exit 1
@@ -113,15 +125,13 @@ check_prerequisites() {
     echo "✔️ Docker is already installed."
   fi
 
-  # Other required commands
   local missing=()
-  for cmd in kubectl yq jq sed gh pkg-config; do
+  for cmd in kubectl yq sed gh pkg-config jq; do
     if ! check_command "$cmd"; then
       missing+=("$cmd")
     fi
   done
 
-  # Check for libssl-dev (Debian/Ubuntu)
   if ! dpkg -s libssl-dev &>/dev/null; then
     missing+=("libssl-dev")
   fi
@@ -131,13 +141,12 @@ check_prerequisites() {
     exit 1
   fi
 
-  # Kubernetes cluster check
   if ! kubectl cluster-info &>/dev/null; then
     echo -e "${RED}❌ No Kubernetes cluster detected via kubectl. Is your cluster running?${NC}"
     exit 1
   fi
 
-  echo -e "${YELLOW}🔍 Verifying CAS service in the cluster...${NC}"
+  echo -e "${YELLOW}🔍 Verifying CAS resource via 'kubectl get cas -A'...${NC}"
   CAS_NAME="${CAS_ADDR%%.*}"
   CAS_NAMESPACE="${CAS_ADDR#*.}"
 
@@ -148,20 +157,16 @@ check_prerequisites() {
 
   if [[ -z "$CAS_PHASE" ]]; then
     echo -e "${RED}❌ No CAS resource named '${CAS_NAME}' found in namespace '${CAS_NAMESPACE}'.${NC}"
-    echo -e "${RED}Please ensure your CAS is correctly deployed and running.${NC}"
     exit 1
   fi
 
   if [[ "$CAS_PHASE" != "HEALTHY" ]]; then
-    echo -e "${RED}❌ CAS '${CAS_NAME}' in namespace '${CAS_NAMESPACE}' is not healthy. PHASE=${CAS_PHASE}${NC}"
+    echo -e "${RED}❌ CAS '${CAS_NAME}' is not healthy. PHASE=${CAS_PHASE}${NC}"
     exit 1
   fi
 
-  echo -e "${GREEN}✔️ CAS '${CAS_NAME}' in namespace '${CAS_NAMESPACE}' is healthy (PHASE=$CAS_PHASE).${NC}"
+  echo -e "${GREEN}✔️ CAS '${CAS_NAME}' is healthy (PHASE=$CAS_PHASE).${NC}"
 
-  echo -e "${GREEN}✔️ All required commands, packages, and cluster access are OK.${NC}"
-
-  # Check GitHub and GitLab repo access as before
   echo -e "${YELLOW}🔐 Checking GitHub/GitLab repository access...${NC}"
   github_repos=(
     "scontain/k8s-scone"
@@ -181,9 +186,6 @@ check_prerequisites() {
     exit 1
   fi
 
-  echo -e "${GREEN}✔️ GitHub and GitLab access OK.${NC}"
-
-  # Check required container images
   echo -e "${YELLOW}📦 Checking required container images...${NC}"
   images=(
     "registry.scontain.com/scone.cloud/sconecli"
@@ -191,7 +193,6 @@ check_prerequisites() {
     "registry.scontain.com/public-images/glibc:2.35-v4"
     "registry.scontain.com/public-images/glibc:2.39-v3"
     "registry.scontain.com/cicd/base/runtime-ubuntu20.04:5.10.0-rc.1"
-    "registry.scontain.com/scone.cloud/sconecli:5.9.0-rc.11"
   )
   for image in "${images[@]}"; do
     if ! docker pull --quiet "$image" &>/dev/null; then
@@ -200,7 +201,7 @@ check_prerequisites() {
     fi
   done
 
-  echo -e "${GREEN}✔️ All required container images are available.${NC}"
+  echo -e "${GREEN}✔️ All prerequisites are OK.${NC}"
 }
 
 # Parse CLI arguments
@@ -212,10 +213,18 @@ while [[ $# -gt 0 ]]; do
     --pullsecret) PULLSECRET="$2"; shift 2 ;;
     --k8s-scone-path) K8S_SCONE_PATH="$2"; shift 2 ;;
     --cas-addr) CAS_ADDR="$2"; shift 2 ;;
+    --cluster-addr) CLUSTER_ADDR="$2"; shift 2 ;;
+    --cvm) CVM_MODE=true; shift ;;
     --help | -h) print_help; exit 0 ;;
     *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac
 done
+
+# Validate CVM dependencies
+if $CVM_MODE && [[ -z "${CLUSTER_ADDR:-}" ]]; then
+  echo -e "${RED}❌ The --cluster-addr flag must be set when using --cvm mode.${NC}"
+  exit 1
+fi
 
 # Ensure base manifests exist
 if [[ ! -d "$GENERATED_DIR" ]]; then
@@ -236,7 +245,6 @@ generate_confidential_manifests
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
 yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*') > "$MANIFEST_FILE"
 
-# Ensure k8s-scone is built
 if [[ ! -x "$K8S_SCONE_PATH/target/debug/k8s-scone" ]]; then
   echo -e "${YELLOW}📥 Cloning and building k8s-scone...${NC}"
   git clone https://github.com/scontain/k8s-scone.git "$K8S_SCONE_PATH"
@@ -249,7 +257,6 @@ else
   echo -e "${GREEN}✅ Using k8s-scone at $K8S_SCONE_PATH${NC}"
 fi
 
-# Run k8s-scone
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
 "$K8S_SCONE_PATH/target/debug/k8s-scone" from -y "$MANIFEST_FILE"
 
@@ -261,7 +268,6 @@ else
   exit 1
 fi
 
-# Push confidential image
 echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
 docker push "${REPO}:${TAG}-scone"
 

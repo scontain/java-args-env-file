@@ -6,7 +6,10 @@ spec:
   protected_image:    {{REPO}}:{{TAG}}
   unprotected_image:        {{REPO}}:{{TAG}} # SGX
   enforce:           ["/opt/java/openjdk/bin/java"] # SGX
-  #tdx: true # TDX
+{{IF_CVM}}
+  tdx: true
+{{END_IF}}
+
 ---
 apiVersion: scone.cloud/v1
 kind: Apply
@@ -23,16 +26,19 @@ spec:
   output_session_file: "./generated/manifest.session.yaml"
   cas_address:
     address: {{CAS_ADDR}} # default: cas.default
-  # attest_cas omitted → defaults to 127.0.0.1:8081
   manifest_env:
     - { name: SCONE_VERSION,  value: "1" }
     - { name: SCONE_LOG,      value: "FATAL" }
     - { name: SCONE_HEAP,      value: "4G" }
-    #- { name: SCONE_CAS_ADDR, value: {{CLUSTER_ADDR}}} # TDX
+{{IF_CVM}}
+    - { name: SCONE_CAS_ADDR, value: {{CLUSTER_ADDR}} }
+{{END_IF}}
+
   session_env:
     - { name: LD_LIBRARY_PATH, value: /opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib }
   permissive: true 
-  #tdx: true # TDX
-  #split: true # TDX 
-  #kata-config-path: "./confidential/initidata.yaml" # TDX
-
+{{IF_CVM}}
+  tdx: true
+  split: true
+  kata-config-path: "./confidential/initidata.yaml"
+{{END_IF}}
