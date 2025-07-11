@@ -11,6 +11,7 @@ MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
 MANIFESTS_DIR="$SCRIPT_DIR/../manifests"
 CONFIDENTIAL_DIR="$SCRIPT_DIR/../confidential"
 CLUSTER_ADDR=127.0.0.1
+CAS_ADDR="cas.default"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -28,6 +29,7 @@ Options:
   --tag <tag>               Docker image tag (default: $TAG)
   --k8s-scone-path <path>   Local path to k8s-scone repo (default: $K8S_SCONE_PATH)
   --cluster-addr <addr>     Address to remote connect to the cas (default: $CLUSTER_ADDR)
+  --cas-addr <name.ns>       CAS service to use (default: $CAS_ADDR)
   --help                    Show this help message
 
 ⚠️  NOTE: You must run the first script BEFORE this to build and generate manifests.
@@ -43,6 +45,7 @@ substitute_template() {
         -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
         -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
         -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g" \
+        -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g" \
         "$input" > "$output"
   else
     sed -e "s|{{REPO}}|${REPO}|g" \
@@ -50,6 +53,7 @@ substitute_template() {
         -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g" \
         -e "/namespace: {{NAMESPACE}}/d" \
         -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g" \
+        -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g" \
         "$input" > "$output"
   fi
 }
@@ -111,7 +115,7 @@ check_prerequisites() {
 
   # Other required commands
   local missing=()
-  for cmd in kubectl yq sed gh pkg-config; do
+  for cmd in kubectl yq jq sed gh pkg-config; do
     if ! check_command "$cmd"; then
       missing+=("$cmd")
     fi
@@ -132,6 +136,28 @@ check_prerequisites() {
     echo -e "${RED}❌ No Kubernetes cluster detected via kubectl. Is your cluster running?${NC}"
     exit 1
   fi
+
+  echo -e "${YELLOW}🔍 Verifying CAS service in the cluster...${NC}"
+  CAS_NAME="${CAS_ADDR%%.*}"
+  CAS_NAMESPACE="${CAS_ADDR#*.}"
+
+  CAS_PHASE=$(kubectl get cas -A -o json | jq -r --arg name "$CAS_NAME" --arg ns "$CAS_NAMESPACE" '
+    .items[] 
+    | select(.metadata.name == $name and .metadata.namespace == $ns) 
+    | .status.phase')
+
+  if [[ -z "$CAS_PHASE" ]]; then
+    echo -e "${RED}❌ No CAS resource named '${CAS_NAME}' found in namespace '${CAS_NAMESPACE}'.${NC}"
+    echo -e "${RED}Please ensure your CAS is correctly deployed and running.${NC}"
+    exit 1
+  fi
+
+  if [[ "$CAS_PHASE" != "HEALTHY" ]]; then
+    echo -e "${RED}❌ CAS '${CAS_NAME}' in namespace '${CAS_NAMESPACE}' is not healthy. PHASE=${CAS_PHASE}${NC}"
+    exit 1
+  fi
+
+  echo -e "${GREEN}✔️ CAS '${CAS_NAME}' in namespace '${CAS_NAMESPACE}' is healthy (PHASE=$CAS_PHASE).${NC}"
 
   echo -e "${GREEN}✔️ All required commands, packages, and cluster access are OK.${NC}"
 
@@ -185,6 +211,7 @@ while [[ $# -gt 0 ]]; do
     --namespace | -n) NAMESPACE="$2"; shift 2 ;;
     --pullsecret) PULLSECRET="$2"; shift 2 ;;
     --k8s-scone-path) K8S_SCONE_PATH="$2"; shift 2 ;;
+    --cas-addr) CAS_ADDR="$2"; shift 2 ;;
     --help | -h) print_help; exit 0 ;;
     *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac
