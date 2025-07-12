@@ -43,7 +43,7 @@ done
 KUBECTL="kubectl"
 [[ -n "$NAMESPACE" ]] && KUBECTL+=" -n $NAMESPACE"
 
-KEYS=("secrets")
+KEYS=("secrets" "\.dockerconfigjson")
 
 for key in "${KEYS[@]}"; do
   echo "🔑 Secret key: $key"

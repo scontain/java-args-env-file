@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Defaults
-REPO="docker.io/dandax123/java-cli-env-reader"
+REPO="registry.scontain.com/workshop/java-cli-env-reader"
 TAG="latest"
 PULLSECRET="sconeapps"
 NAMESPACE=""
