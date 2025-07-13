@@ -26,12 +26,12 @@ Usage: $0 [OPTIONS]
 Build and push Docker image, and generate Kubernetes manifests from templates.
 
 Options:
-  --repo <repo>         Docker repository (default: $REPO)
-  --tag <tag>           Docker image tag (default: $TAG)
-  --pullsecret <name>   Kubernetes imagePullSecret name (default: $PULLSECRET)
-  --namespace, -n <ns>  Kubernetes namespace to inject into manifests
+  --repo <repo>         Docker repository (default: '$REPO')
+  --tag <tag>           Docker image tag (default: '$TAG')
+  --pullsecret <name>   Kubernetes imagePullSecret name (default: '$PULLSECRET')
+  --namespace, -n <ns>  Kubernetes namespace to inject into manifests (default: '$NAMESPACE')
   --no-cache            Disable Docker build cache (force image rebuild)
-  --bundle-manifests    Bundle the Manifests into one yaml file
+  --bundle-manifests    Bundle the Manifests into one yaml file ('$(realpath "$SCRIPT_DIR/../generated/manifest.yaml")')
   --help                Show this help message
 
 
