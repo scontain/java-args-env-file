@@ -11,6 +11,7 @@ NC='\033[0m' # No Color
 CREATE_CLUSTER=true
 INSTALL_OPERATOR=false
 DELETE_CLUSTER=false
+FORCE=false
 
 # Credential variables (can be set via env or flags)
 REGISTRY_USERNAME=${REGISTRY_USERNAME:-""}
@@ -33,6 +34,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --delete)
             DELETE_CLUSTER=true
+            shift
+            ;;
+        --force)
+            FORCE=true
             shift
             ;;
         --registry-username)
@@ -73,6 +78,7 @@ show_help() {
     echo -e "  --nocluster             Skip cluster creation"
     echo -e "  --operator              Install SCONE operator"
     echo -e "  --delete                Delete the AKS cluster (ignores other flags)"
+    echo -e "  --force                 Skip confirmation prompts"
     echo -e "  --registry-username     Registry username (or set REGISTRY_USERNAME env)"
     echo -e "  --registry-token        Registry access token (or set REGISTRY_ACCESS_TOKEN env)"
     echo -e "  --registry-email        Registry email (or set REGISTRY_EMAIL env)"
@@ -86,6 +92,30 @@ show_help() {
 # Enhanced error handling
 trap 'echo -e "${RED}⛔ Script failed at line $LINENO. Command: $BASH_COMMAND${NC}"; exit 1' ERR
 
+# Check if already logged in to Azure
+check_azure_login() {
+    echo -e "${GREEN}🔍 Checking Azure login status...${NC}"
+    if az account show &>/dev/null; then
+        echo -e "${GREEN}✅ Already logged in to Azure${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️ Not logged in to Azure${NC}"
+        return 1
+    fi
+}
+
+# Check if cluster already exists
+cluster_exists() {
+    echo -e "${GREEN}🔍 Checking if cluster 'aks-scone' exists in resource group '$GROUP_AKS'...${NC}"
+    if az aks show --name aks-scone --resource-group "$GROUP_AKS" &>/dev/null; then
+        echo -e "${YELLOW}⚠️ Cluster 'aks-scone' already exists in resource group '$GROUP_AKS'${NC}"
+        return 0
+    else
+        echo -e "${GREEN}✅ Cluster 'aks-scone' does not exist in resource group '$GROUP_AKS'${NC}"
+        return 1
+    fi
+}
+
 # Delete AKS cluster
 delete_aks_cluster() {
     if [[ -z "$GROUP_AKS" ]]; then
@@ -93,18 +123,27 @@ delete_aks_cluster() {
         exit 1
     fi
 
-    echo -e "${YELLOW}⚠️ WARNING: You are about to delete the AKS cluster 'aks-scone' in resource group '$GROUP_AKS'${NC}"
-    read -p "Are you sure you want to continue? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}✅ Cluster deletion canceled${NC}"
-        exit 0
+    if ! cluster_exists; then
+        echo -e "${RED}❌ Cluster 'aks-scone' does not exist in resource group '$GROUP_AKS'${NC}"
+        exit 1
     fi
 
-    echo -e "${GREEN}🚀 Logging in to Azure...${NC}"
-    if ! az login --use-device-code; then
-        echo -e "${RED}❌ Failed to log in to Azure${NC}"
-        exit 1
+    if [ "$FORCE" = false ]; then
+        echo -e "${YELLOW}⚠️ WARNING: You are about to delete the AKS cluster 'aks-scone' in resource group '$GROUP_AKS'${NC}"
+        read -p "Are you sure you want to continue? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}✅ Cluster deletion canceled${NC}"
+            exit 0
+        fi
+    fi
+
+    if ! check_azure_login; then
+        echo -e "${GREEN}🚀 Logging in to Azure...${NC}"
+        if ! az login --use-device-code; then
+            echo -e "${RED}❌ Failed to log in to Azure${NC}"
+            exit 1
+        fi
     fi
 
     echo -e "${RED}🔥 Deleting AKS cluster...${NC}"
@@ -179,10 +218,36 @@ check_credentials() {
 
 # Create AKS cluster with error handling
 create_aks_cluster() {
-    echo -e "${GREEN}🚀 Logging in to Azure...${NC}"
-    if ! az login --use-device-code; then
-        echo -e "${RED}❌ Failed to log in to Azure${NC}"
-        exit 1
+    if ! check_azure_login; then
+        echo -e "${GREEN}🚀 Logging in to Azure...${NC}"
+        if ! az login --use-device-code; then
+            echo -e "${RED}❌ Failed to log in to Azure${NC}"
+            exit 1
+        fi
+    fi
+
+    if cluster_exists; then
+        if [ "$FORCE" = false ]; then
+            echo -e "${YELLOW}⚠️ Cluster 'aks-scone' already exists in resource group '$GROUP_AKS'${NC}"
+            read -p "Do you want to recreate it? (y/n) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${GREEN}✅ Using existing cluster${NC}"
+                return
+            fi
+        fi
+
+        echo -e "${YELLOW}⚠️ Deleting existing cluster before recreation...${NC}"
+        if ! az aks delete --name aks-scone --resource-group "$GROUP_AKS" --yes --no-wait; then
+            echo -e "${RED}❌ Failed to delete existing cluster${NC}"
+            exit 1
+        fi
+
+        # Wait for cluster to be deleted
+        echo -e "${YELLOW}⏳ Waiting for existing cluster to be deleted...${NC}"
+        while cluster_exists; do
+            sleep 10
+        done
     fi
 
     echo -e "${GREEN}🏗️ Creating AKS cluster...${NC}"
@@ -250,9 +315,8 @@ install_operator() {
             output=$(kubectl get cas cas -n scone-system -o json 2>/dev/null || echo "")
             phase=$(echo "$output" | jq -r '.status.phase // empty')
             provisioned=$(echo "$output" | jq -r '.status.provisioned // "No"')
-            migration=$(echo "$output" | jq -r '.status.migration // ""')
 
-            if [[ "$phase" == "HEALTHY" && "$provisioned" == "Yes" && "$migration" == "$CZ/$CZ" ]]; then
+            if [[ "$phase" == "HEALTHY" && "$provisioned" == "Yes" ]]; then
                 break
             fi
             
