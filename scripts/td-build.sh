@@ -6,7 +6,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND"' ERR
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
 TAG="latest"
-K8S_SCONE_PATH="$(which k8s-scone)"
+K8S_SCONE_PATH=""
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 GENERATED_DIR="$SCRIPT_DIR/../generated"
 MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
@@ -41,7 +41,7 @@ Options:
   --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
   --help | -h               Show this help message
 
-⚠️  NOTE: You must run the first script BEFORE this to build and generate manifests.
+⚠️  NOTE: You must run the first script with --bundle-manifests flag BEFORE this to build and generate manifests.
 EOF
 }
 
@@ -168,10 +168,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if ! $K8S_SCONE_PATH --help >/dev/null 2>&1; then
-  echo -e "${RED}❌ k8s-scone (path: '$K8S_SCONE_PATH') failed to run${NC}"
-  echo "💡 Please specify the path to k8s-scone using the --k8s-scone-path flag"
-  exit 1
+# Try to find k8s-scone if not specified
+if [[ -z "$K8S_SCONE_PATH" ]]; then
+  K8S_SCONE_PATH="$(which k8s-scone 2>/dev/null || true)"
+  if [[ -z "$K8S_SCONE_PATH" ]]; then
+    echo -e "${RED}❌ k8s-scone not found in PATH${NC}"
+    echo "💡 Please specify the path to k8s-scone using the --k8s-scone-path flag"
+    exit 1
+  fi
 fi
 
 # Validate CVM dependencies
