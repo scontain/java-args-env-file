@@ -6,7 +6,8 @@ import java.util.Map;
 public class Main {
     public static void main(String[] args) {
         // Print CLI arguments
-        System.out.println("CLI Arguments:");
+        System.out.println("Java-args-env-file- Example app\n");
+        System.out.println("Command Line Arguments:");
         for (int i = 0; i < args.length; i++) {
             System.out.printf("arg[%d]: %s%n", i, args[i]);
         }
