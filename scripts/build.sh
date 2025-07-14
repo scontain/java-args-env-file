@@ -7,7 +7,7 @@ TAG="latest"
 PULLSECRET="sconeapps"
 NAMESPACE=""
 NO_CACHE=false
-BUNDLE_MANIFESTS=true
+BUNDLE_MANIFESTS=false
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -78,12 +78,14 @@ apply_template_params() {
   if [[ -n "$NAMESPACE" ]]; then
     sed -e "s|{{REPO}}|${REPO}|g" \
       -e "s|{{TAG}}|${TAG}|g" \
+      -e "s|{{IMAGE_ID}}|${IMAGE_ID}|g" \
       -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
       -e "s|{{NAMESPACE}}|${NAMESPACE}|g" \
       "$local_filepath" >"$local_output"
   else
     sed -e "s|{{REPO}}|${REPO}|g" \
       -e "s|{{TAG}}|${TAG}|g" \
+      -e "s|{{IMAGE_ID}}|${IMAGE_ID}|g" \
       -e "s|{{PULLSECRET}}|${PULLSECRET}|g" \
       -e "/namespace: {{NAMESPACE}}/d" \
       "$local_filepath" >"$local_output"
@@ -142,10 +144,11 @@ done
 echo "📦 Building Docker image: $REPO:$TAG"
 BUILD_ARGS=()
 $NO_CACHE && BUILD_ARGS+=(--no-cache --pull)
-docker build "${BUILD_ARGS[@]}" -t "${REPO}:${TAG}" -f $SCRIPT_DIR/../Dockerfile $SCRIPT_DIR/../
+docker build "${BUILD_ARGS[@]}" --quiet -t "${REPO}:${TAG}" -f $SCRIPT_DIR/../Dockerfile $SCRIPT_DIR/../
 
 echo "🚀 Pushing image to $REPO:$TAG"
 docker push "${REPO}:${TAG}"
+IMAGE_ID=$(docker inspect --format='{{index .RepoDigests 0}}'  "${REPO}:${TAG}" | tr -d '\n')
 
 echo "🛠️ Generating Kubernetes manifests"
 mkdir -p $SCRIPT_DIR/../generated

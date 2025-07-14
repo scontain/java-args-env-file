@@ -5,6 +5,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 NAMESPACE=""
 CONTEXT=""
 HELP=false
+CLUSTER_ONLY=false
 
 print_help() {
   cat <<EOF
@@ -14,6 +15,7 @@ Deletes all Kubernetes resources created from generated manifests.
 
 Options:
   --namespace, -n <ns>   Target Kubernetes namespace (default: current context default)
+  --cluster-only         Delete only the Kubernetes resources associated with the cluster, not the local files
   --context <ctx>        kubectl context to use
   --help                 Show this help message
 
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
     CONTEXT="$2"
     shift 2
     ;;
+  --cluster-only)
+    CLUSTER_ONLY=true
+    shift
+    ;;
   --help | -h)
     print_help
     exit 0
@@ -52,8 +58,18 @@ KUBECTL_CMD="kubectl"
 [[ -n "$CONTEXT" ]] && KUBECTL_CMD+=" --context=$CONTEXT"
 [[ -n "$NAMESPACE" ]] && KUBECTL_CMD+=" --namespace=$NAMESPACE"
 
+# Delete all resources in the specified namespace
+kubectl delete -f generated/configmap.yaml -f generated/deployment.yaml -f generated/secret.yaml || true
+
+if $CLUSTER_ONLY; then
+  echo "✅ Cluster resources deleted. Exiting without deleting local files."
+  exit 0
+fi
+
 # Clean up all generated .yaml files
 rm -rf $SCRIPT_DIR/../generated
+rm -f arg-env.json
+rm -f report.json
 
 echo "✅ Cleanup complete"
 [[ -n "$NAMESPACE" ]] && echo "🔍 Namespace used: $NAMESPACE"

@@ -1,22 +1,10 @@
-apiVersion: scone.cloud/v1
-kind: Register
-metadata:
-  name: arg-env             # will become ./petclinic.json
-spec:
-  protected_image:    {{REPO}}:{{TAG}}
-  unprotected_image:        {{REPO}}:{{TAG}} # SGX
-  enforce:           ["/opt/java/openjdk/bin/java"] # SGX
-{{IF_CVM}}
-  tdx: true
-{{END_IF}}
 
----
 apiVersion: scone.cloud/v1
 kind: Apply
 metadata:
   name: arg-env
 spec:
-  # Inline‑selection: pick *only* the Deployment named “flask-server”
+  # Inline‑selection: pick *only* the Deployment
   file:
     - name: java-cli-env-reader
     - name: java-cli-env-secret
@@ -29,7 +17,10 @@ spec:
   manifest_env:
     - { name: SCONE_VERSION,  value: "1" }
     - { name: SCONE_LOG,      value: "FATAL" }
-    - { name: SCONE_HEAP,      value: "4G" }
+    - { name: SCONE_HEAP,     value: "8G" }
+    - { name: SCONE_SYSLIBS,  value: "1" }
+    - { name: SCONE_ALLOW_DLOPEN, value: "1" }
+    - { name: SCONE_EDMM_MODE, value: "auto" }
 {{IF_CVM}}
     - { name: SCONE_CAS_ADDR, value: {{CLUSTER_ADDR}} }
 {{END_IF}}

@@ -4,7 +4,7 @@ set -euo pipefail
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
 TAG="latest"
-K8S_SCONE_PATH="${HOME}/k8s-scone"
+K8S_SCONE_PATH="$(which k8s-scone)"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 GENERATED_DIR="$SCRIPT_DIR/../generated"
 MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
@@ -13,6 +13,9 @@ CONFIDENTIAL_DIR="$SCRIPT_DIR/../confidential"
 CLUSTER_ADDR="127.0.0.1"
 CAS_ADDR="cas.default"
 CVM_MODE=false
+TDX_MODE=false
+APP_LABEL="arg-env"
+BINARY_PATH="/opt/java/openjdk/bin/java"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -75,6 +78,60 @@ substitute_template() {
 }
 
 
+register_image() {
+  local key="$1"
+  local image="$2"
+  transformed=${image/@sha256:/:}
+  echo "🔧 Registering image: $image as $transformed"
+  docker tag "$image" "$transformed"
+  cat > "$GENERATED_DIR/$key.yaml" <<EOF
+apiVersion: scone.cloud/v1
+kind: Register
+metadata:
+  name: $APP_LABEL         
+spec:
+  protected_image:   $transformed
+  unprotected_image: $transformed # SGX
+  enforce:           ["$BINARY_PATH"] # SGX
+  tdx: $TDX_MODE
+EOF
+}
+
+# Normalize image name (optional — you could also hash it)
+normalize_image_key() {
+  local image="$1"
+  echo "$image" \
+    | sed -e 's|/|__SLASH__|g' \
+          -e 's/@/__AT__/g' \
+          -e 's/:/__COLON__/g' \
+          -e 's/\"/_/g' \
+          -e 's|\.|__DOT__|g' 
+}
+
+# Associative array to keep track of seen images
+declare -A seen_images
+
+register_images() {
+  # Define your image registration function
+
+  # Loop through all YAML files
+  FILES_TO_PARSE=$(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest.yaml')
+  for file in $FILES_TO_PARSE; do
+    [[ -e "$file" ]] || continue
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^[[:space:]]*image:[[:space:]]*(.+)$ ]]; then
+        image="${BASH_REMATCH[1]}"
+        image="${image//\"/}"
+        key=$(normalize_image_key "$image")
+        if [[ -z "${seen_images[$key]+exists}" ]]; then
+          seen_images["$key"]=1
+          register_image "$key" "$image"
+        fi
+      fi
+    done < "$file"
+  done
+}
+
 generate_confidential_manifests() {
   echo -e "${YELLOW}🔐 Generating confidential manifests...${NC}"
   for filepath in "$CONFIDENTIAL_DIR"/*.template.yaml; do
@@ -87,122 +144,6 @@ generate_confidential_manifests() {
   done
 }
 
-check_prerequisites() {
-  echo -e "${YELLOW}Checking prerequisites...${NC}"
-
-  check_command() {
-    command -v "$1" &>/dev/null
-  }
-
-  if ! dpkg-query -W -f='${Status}' gcc-multilib 2>/dev/null | grep "ok installed" &>/dev/null; then
-    echo "📥 Installing gcc-multilib..."
-    sudo apt update
-    sudo apt -y install gcc-multilib
-  else
-    echo "✔️ gcc-multilib is already installed."
-  fi
-
-  if ! check_command rustc; then
-    echo -e "${RED}❌ Rust is not installed. Please install it from https://rustup.rs/${NC}"
-    exit 1
-  else
-    echo "✔️ Rust is already installed."
-  fi
-
-  if ! check_command cosign; then
-    echo "📥 Installing Cosign..."
-    curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
-    sudo mv cosign-linux-amd64 /usr/local/bin/cosign
-    sudo chmod +x /usr/local/bin/cosign
-  else
-    echo "✔️ Cosign is already installed."
-  fi
-
-  if ! check_command docker; then
-    echo -e "${RED}❌ Docker is not installed. Please install it from https://docs.docker.com/engine/install/ubuntu/${NC}"
-    exit 1
-  else
-    echo "✔️ Docker is already installed."
-  fi
-
-  local missing=()
-  for cmd in kubectl yq sed gh pkg-config jq; do
-    if ! check_command "$cmd"; then
-      missing+=("$cmd")
-    fi
-  done
-
-  if ! dpkg -s libssl-dev &>/dev/null; then
-    missing+=("libssl-dev")
-  fi
-
-  if [ ${#missing[@]} -ne 0 ]; then
-    echo -e "${RED}❌ Missing required tools/packages:${NC} ${missing[*]}"
-    exit 1
-  fi
-
-  if ! kubectl cluster-info &>/dev/null; then
-    echo -e "${RED}❌ No Kubernetes cluster detected via kubectl. Is your cluster running?${NC}"
-    exit 1
-  fi
-
-  echo -e "${YELLOW}🔍 Verifying CAS resource via 'kubectl get cas -A'...${NC}"
-  CAS_NAME="${CAS_ADDR%%.*}"
-  CAS_NAMESPACE="${CAS_ADDR#*.}"
-
-  CAS_PHASE=$(kubectl get cas -A -o json | jq -r --arg name "$CAS_NAME" --arg ns "$CAS_NAMESPACE" '
-    .items[] 
-    | select(.metadata.name == $name and .metadata.namespace == $ns) 
-    | .status.phase')
-
-  if [[ -z "$CAS_PHASE" ]]; then
-    echo -e "${RED}❌ No CAS resource named '${CAS_NAME}' found in namespace '${CAS_NAMESPACE}'.${NC}"
-    exit 1
-  fi
-
-  if [[ "$CAS_PHASE" != "HEALTHY" ]]; then
-    echo -e "${RED}❌ CAS '${CAS_NAME}' is not healthy. PHASE=${CAS_PHASE}${NC}"
-    exit 1
-  fi
-
-  echo -e "${GREEN}✔️ CAS '${CAS_NAME}' is healthy (PHASE=$CAS_PHASE).${NC}"
-
-  echo -e "${YELLOW}🔐 Checking GitHub/GitLab repository access...${NC}"
-  github_repos=(
-    "scontain/k8s-scone"
-    "scontain/lib-sconify"
-    "scontain/cargo-sconify"
-    "scontain/signpolicy"
-  )
-  for repo in "${github_repos[@]}"; do
-    if ! gh repo view "$repo" &>/dev/null; then
-      echo -e "${RED}❌ Cannot access GitHub repo: $repo${NC}"
-      exit 1
-    fi
-  done
-
-  if ! git ls-remote "https://gitlab.scontain.com/amand1o/cvm-mode.git" &>/dev/null; then
-    echo -e "${RED}❌ Cannot access GitLab repo: amand1o/cvm-mode${NC}"
-    exit 1
-  fi
-
-  echo -e "${YELLOW}📦 Checking required container images...${NC}"
-  images=(
-    "registry.scontain.com/scone.cloud/sconecli"
-    "registry.scontain.com/scone.cloud/sconecli:5.9.0-rc.11"
-    "registry.scontain.com/public-images/glibc:2.35-v4"
-    "registry.scontain.com/public-images/glibc:2.39-v3"
-    "registry.scontain.com/cicd/base/runtime-ubuntu20.04:5.10.0-rc.1"
-  )
-  for image in "${images[@]}"; do
-    if ! docker pull --quiet "$image" &>/dev/null; then
-      echo -e "${RED}❌ Cannot pull Docker image: $image${NC}"
-      exit 1
-    fi
-  done
-
-  echo -e "${GREEN}✔️ All prerequisites are OK.${NC}"
-}
 
 # Parse CLI arguments
 while [[ $# -gt 0 ]]; do
@@ -239,26 +180,21 @@ if [[ ! -f "$MANIFEST_FILE" ]]; then
   exit 1
 fi
 
-check_prerequisites
+if [[ ! -e "identity.pem" ]]; then
+  echo -e "${YELLOW}📦 Generating a new identity.pem${NC}"
+  openssl genrsa -3 -out "identity.pem" 3072
+fi
+
 generate_confidential_manifests
+register_images
+
+# find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest.yaml'
 
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
 yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*') > "$MANIFEST_FILE"
 
-if [[ ! -x "$K8S_SCONE_PATH/target/debug/k8s-scone" ]]; then
-  echo -e "${YELLOW}📥 Cloning and building k8s-scone...${NC}"
-  git clone https://github.com/scontain/k8s-scone.git "$K8S_SCONE_PATH"
-  cd "$K8S_SCONE_PATH"
-  git fetch
-  git checkout amand1o/pet-clinic
-  cargo build
-  cd - >/dev/null
-else
-  echo -e "${GREEN}✅ Using k8s-scone at $K8S_SCONE_PATH${NC}"
-fi
-
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
-"$K8S_SCONE_PATH/target/debug/k8s-scone" from -y "$MANIFEST_FILE"
+$K8S_SCONE_PATH from -y "$MANIFEST_FILE"
 
 MANIFEST_RENDERED="generated/manifest.cleaned.yaml"
 if [[ -f "$MANIFEST_RENDERED" ]]; then
