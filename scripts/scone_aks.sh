@@ -89,6 +89,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+show_help() {
+    echo -e "${GREEN}Usage: $0 [OPTIONS]${NC}"
+    echo -e "Options:"
+    echo -e "  --nocluster             Skip cluster creation"
+    echo -e "  --operator              Install SCONE operator"
+    echo -e "  --delete                Delete the AKS cluster (ignores other flags)"
+    echo -e "  --force                 Skip confirmation prompts"
+    echo -e "  --registry-username     Registry username (or set REGISTRY_USERNAME env)"
+    echo -e "  --registry-token        Registry access token (or set REGISTRY_ACCESS_TOKEN env)"
+    echo -e "  --registry-email        Registry email (or set REGISTRY_EMAIL env)"
+    echo -e "  --resource-group        Azure resource group (or set GROUP_AKS env)"
+    echo -e "  --dcap-key              DCAP API key (or set DCAP_API_KEY env)"
+    echo -e "  --help                  Show this help message"
+    echo -e ""
+    echo -e "Note: All credentials can be provided either via flags or environment variables."
+}
+
 # Enhanced error handling
 trap 'echo -e "${RED}⛔ Script failed at line $LINENO. Command: $BASH_COMMAND${NC}"; exit 1' ERR
 
