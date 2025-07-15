@@ -5,12 +5,12 @@ metadata:
   name: arg-env
 spec:
   # Inline‑selection: pick *only* the Deployment
-  file:
+  label:
     - name: java-cli-env-reader
     - name: java-cli-env-secret
     - name: java-cli-env-config
-
-  output_manifest_file: "./generated/manifest.cleaned.yaml"
+  unique_app_id: scgz45kf51
+  output_manifest_file: "./generated/manifest.sanitized.yaml"
   output_session_file: "./generated/manifest.session.yaml"
   cas_address:
     address: {{CAS_ADDR}} # default: cas.default
