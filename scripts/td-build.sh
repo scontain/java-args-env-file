@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+trap 'echo "Error on line $LINENO: $BASH_COMMAND"' ERR
+
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
 TAG="latest"
@@ -82,7 +84,7 @@ register_image() {
   local key="$1"
   local image="$2"
   transformed=${image/@sha256:/:}
-  native=${image/@sha256:/:native}
+  native="eclipse-temurin:17-jre"
   echo "🔧 Registering image: $image as $transformed"
   docker tag "$image" "$transformed"
   cat > "$GENERATED_DIR/$key.yaml" <<EOF
@@ -96,6 +98,7 @@ spec:
   enforce:           ["$BINARY_PATH"] # SGX
   tdx: $TDX_MODE
 EOF
+ k8s-scone from -y "$GENERATED_DIR/$key.yaml"
 }
 
 # Normalize image name (optional — you could also hash it)
@@ -175,10 +178,8 @@ if [[ ! -d "$GENERATED_DIR" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$MANIFEST_FILE" ]]; then
-  echo -e "${RED}❌ Missing manifest file: $MANIFEST_FILE${NC}"
-  echo "💡 Run the base script first to generate manifest.yaml."
-  exit 1
+if [[ -f "$MANIFEST_FILE" ]]; then
+  echo -e "${YELLOW}📦 Manifest file already exists - removing: $MANIFEST_FILE${NC}"
 fi
 
 if [[ ! -e "identity.pem" ]]; then
@@ -194,12 +195,12 @@ register_images
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
 cat "$GENERATED_DIR/setup.yaml" > "$MANIFEST_FILE"
 echo "---" >> "$MANIFEST_FILE"
-yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml') >> "$MANIFEST_FILE"
+yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name 'manifest*.yaml' ! -name '*initidata*' ! -name 'setup.yaml') >> "$MANIFEST_FILE"
 
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
 $K8S_SCONE_PATH from -y "$MANIFEST_FILE"
 
-MANIFEST_RENDERED="generated/manifest.cleaned.yaml"
+MANIFEST_RENDERED="generated/manifest.sanitized.yaml"
 if [[ -f "$MANIFEST_RENDERED" ]]; then
   echo -e "${GREEN}✅ Confidential manifest: $MANIFEST_RENDERED${NC}"
 else
