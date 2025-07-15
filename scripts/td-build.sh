@@ -82,6 +82,7 @@ register_image() {
   local key="$1"
   local image="$2"
   transformed=${image/@sha256:/:}
+  native=${image/@sha256:/:native}
   echo "🔧 Registering image: $image as $transformed"
   docker tag "$image" "$transformed"
   cat > "$GENERATED_DIR/$key.yaml" <<EOF
@@ -91,7 +92,7 @@ metadata:
   name: $APP_LABEL         
 spec:
   protected_image:   $transformed
-  unprotected_image: $transformed # SGX
+  unprotected_image: $native # SGX
   enforce:           ["$BINARY_PATH"] # SGX
   tdx: $TDX_MODE
 EOF
@@ -191,7 +192,9 @@ register_images
 # find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest.yaml'
 
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
-yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*') > "$MANIFEST_FILE"
+cat "$GENERATED_DIR/setup.yaml" > "$MANIFEST_FILE"
+echo "---" >> "$MANIFEST_FILE"
+yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml') >> "$MANIFEST_FILE"
 
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
 $K8S_SCONE_PATH from -y "$MANIFEST_FILE"
