@@ -16,6 +16,7 @@ CLUSTER_ADDR="127.0.0.1"
 CAS_ADDR="cas.default"
 CVM_MODE=false
 TDX_MODE=false
+SPLIT_MODE=false
 APP_LABEL="arg-env"
 BINARY_PATH="/opt/java/openjdk/bin/java"
 
@@ -39,6 +40,7 @@ Options:
   --cas-addr <name.ns>      CAS service to use (default: cas.default)
   --cluster-addr <addr>     Address to remote connect to the CAS (default: $CLUSTER_ADDR)
   --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
+  --split                   Enable split mode (can be used independently of --cvm)
   --help | -h               Show this help message
 
 ⚠️  NOTE: You must run the first script with --bundle-manifests flag BEFORE this to build and generate manifests.
@@ -58,11 +60,19 @@ substitute_template() {
   )
 
   if [[ -n "${NAMESPACE:-}" ]]; then
-    sed_expr+=(-e "s|{{NAMESPACE}}|${NAMESPACE}|g")
+    sed_expr+=(-e "s|{{NAMESPACE}}|  namespace: ${NAMESPACE}|g")
   else
-    sed_expr+=(-e "/namespace: {{NAMESPACE}}/d")
+    sed_expr+=(-e "/{{NAMESPACE}}/d")
   fi
 
+  # Handle split mode independently
+  if $SPLIT_MODE; then
+    sed_expr+=(-e "s|{{SPLIT}}|split: true|g")
+  else
+    sed_expr+=(-e "s|{{SPLIT}}||g")
+  fi
+
+  # Handle CVM mode
   if $CVM_MODE; then
     # Delete only the markers, keep the lines inside the block
     sed_expr+=(
@@ -162,7 +172,8 @@ while [[ $# -gt 0 ]]; do
     --k8s-scone-path) K8S_SCONE_PATH="$2"; shift 2 ;;
     --cas-addr) CAS_ADDR="$2"; shift 2 ;;
     --cluster-addr) CLUSTER_ADDR="$2"; shift 2 ;;
-    --cvm) CVM_MODE=true; shift ;;
+    --cvm) CVM_MODE=true; TDX_MODE=true; shift ;;
+    --split) SPLIT_MODE=true; shift ;;
     --help | -h) print_help; exit 0 ;;
     *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac

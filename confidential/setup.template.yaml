@@ -3,6 +3,7 @@ apiVersion: scone.cloud/v1
 kind: Apply
 metadata:
   name: arg-env
+{{NAMESPACE}}
 spec:
   # Inline‑selection: pick *only* the Deployment
   label:
@@ -30,8 +31,8 @@ spec:
   session_env:
     - { name: LD_LIBRARY_PATH, value: /opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib }
   permissive: true 
+  {{SPLIT}}
 {{IF_CVM}}
   tdx: true
-  split: true
   kata-config-path: "./confidential/initidata.yaml"
 {{END_IF}}
