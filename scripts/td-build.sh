@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+trap 'echo "Error on line $LINENO: $BASH_COMMAND"' ERR
+
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
 TAG="latest"
@@ -92,19 +94,21 @@ register_image() {
   local key="$1"
   local image="$2"
   transformed=${image/@sha256:/:}
+  native="eclipse-temurin:17-jre"
   echo "🔧 Registering image: $image as $transformed"
   docker tag "$image" "$transformed"
-  cat > "$GENERATED_DIR/$key.yaml" <<EOF
+  cat > "$GENERATED_DIR/k8s_register_$key.yaml" <<EOF
 apiVersion: scone.cloud/v1
 kind: Register
 metadata:
   name: $APP_LABEL         
 spec:
   protected_image:   $transformed
-  unprotected_image: $transformed # SGX
+  unprotected_image: $native # SGX
   enforce:           ["$BINARY_PATH"] # SGX
   tdx: $TDX_MODE
 EOF
+ k8s-scone from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }
 
 # Normalize image name (optional — you could also hash it)
@@ -122,10 +126,13 @@ normalize_image_key() {
 declare -A seen_images
 
 register_images() {
-  # Define your image registration function
+  # Remove old manifests - we will regenerate now 
+
+  rm -f "$GENERATED_DIR"/k8s_register_*.yaml
+  rm -f "$GENERATED_DIR/manifest.yaml"  "$GENERATED_DIR/manifest.sanitized.yaml" "$GENERATED_DIR/manifest.session.yaml" 
 
   # Loop through all YAML files
-  FILES_TO_PARSE=$(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest.yaml')
+  FILES_TO_PARSE=$(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest*.yaml')
   for file in $FILES_TO_PARSE; do
     [[ -e "$file" ]] || continue
     while IFS= read -r line; do
@@ -195,10 +202,8 @@ if [[ ! -d "$GENERATED_DIR" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$MANIFEST_FILE" ]]; then
-  echo -e "${RED}❌ Missing manifest file: $MANIFEST_FILE${NC}"
-  echo "💡 Run the base script first to generate manifest.yaml."
-  exit 1
+if [[ -f "$MANIFEST_FILE" ]]; then
+  echo -e "${YELLOW}📦 Manifest file already exists - removing: $MANIFEST_FILE${NC}"
 fi
 
 if [[ ! -e "identity.pem" ]]; then
@@ -212,12 +217,14 @@ register_images
 # find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest.yaml'
 
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
-yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*') > "$MANIFEST_FILE"
+cat "$GENERATED_DIR/setup.yaml" > "$MANIFEST_FILE"
+echo "---" >> "$MANIFEST_FILE"
+yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name 'registry*.yaml' ! -name 'manifest*.yaml' ! -name '*initidata*' ! -name 'setup.yaml') >> "$MANIFEST_FILE"
 
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
 $K8S_SCONE_PATH from -y "$MANIFEST_FILE"
 
-MANIFEST_RENDERED="generated/manifest.cleaned.yaml"
+MANIFEST_RENDERED="generated/manifest.sanitized.yaml"
 if [[ -f "$MANIFEST_RENDERED" ]]; then
   echo -e "${GREEN}✅ Confidential manifest: $MANIFEST_RENDERED${NC}"
 else
@@ -225,7 +232,7 @@ else
   exit 1
 fi
 
-echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
-docker push "${REPO}:${TAG}-scone"
+# echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
+# docker push "${REPO}:${TAG}-scone"
 
 echo -e "${GREEN}🎉 Confidentialization completed successfully.${NC}"

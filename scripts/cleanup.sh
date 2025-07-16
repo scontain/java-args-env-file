@@ -70,6 +70,7 @@ fi
 rm -rf $SCRIPT_DIR/../generated
 rm -f arg-env.json
 rm -f report.json
+rm -f Dockerfile.*
 
 echo "✅ Cleanup complete"
 [[ -n "$NAMESPACE" ]] && echo "🔍 Namespace used: $NAMESPACE"

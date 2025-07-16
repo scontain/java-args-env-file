@@ -6,7 +6,7 @@ import java.util.Map;
 public class Main {
     public static void main(String[] args) {
         // Print CLI arguments
-        System.out.println("Java-args-env-file- Example app\n");
+        System.out.println("Java-args-env-file V3\n");
         System.out.println("Command Line Arguments:");
         for (int i = 0; i < args.length; i++) {
             System.out.printf("arg[%d]: %s%n", i, args[i]);
@@ -25,14 +25,14 @@ public class Main {
         readAndPrintFile("/config/secrets", "Secrets File");
 
         // Sleep for 1 hour
-        System.out.println("\n⏳ Sleeping for 1 hour to keep the container alive...");
+        System.out.println("\nSleeping for 1 hour to keep the container alive...");
         try {
             Thread.sleep(3600_000); // 1 hour = 3600000 ms
         } catch (InterruptedException e) {
             System.err.println("Sleep interrupted: " + e.getMessage());
         }
 
-        System.out.println("✅ Done.");
+        System.out.println("Done.");
 
     }
 
