@@ -160,9 +160,11 @@ for filepath in $SCRIPT_DIR/../manifests/*.template.yaml; do
   echo "🔧 Creating $output for $template"
   apply_template_params $filepath $output
 done
+echo ✅ All manifests generated in $(realpath "$SCRIPT_DIR/../generated")
+[[ -n "$NAMESPACE" ]] && echo "📂 Namespace injected: $NAMESPACE"
+
 if [ $BUNDLE_MANIFESTS == true ]; then
-  yq ea 'select(fileIndex >= 0)' $(find $SCRIPT_DIR/../generated -type f -name "*.yaml" ! -name "*.template.yaml") >$SCRIPT_DIR/../generated/manifest.yaml
+  yq ea 'select(fileIndex >= 0)' $(find $SCRIPT_DIR/../generated -type f -name "*.yaml" ! -name "*.template.yaml") >$SCRIPT_DIR/../generated/manifest.native.yaml
+  echo ✅ Bundle manifest stored in $(realpath "$SCRIPT_DIR/../generated/manifest.native.yaml")
 fi
 
-echo "✅ All manifests generated"
-[[ -n "$NAMESPACE" ]] && echo "📂 Namespace injected: $NAMESPACE"
