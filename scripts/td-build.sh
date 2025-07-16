@@ -87,7 +87,7 @@ register_image() {
   native="eclipse-temurin:17-jre"
   echo "🔧 Registering image: $image as $transformed"
   docker tag "$image" "$transformed"
-  cat > "$GENERATED_DIR/$key.yaml" <<EOF
+  cat > "$GENERATED_DIR/k8s_register_$key.yaml" <<EOF
 apiVersion: scone.cloud/v1
 kind: Register
 metadata:
@@ -98,7 +98,7 @@ spec:
   enforce:           ["$BINARY_PATH"] # SGX
   tdx: $TDX_MODE
 EOF
- k8s-scone from -y "$GENERATED_DIR/$key.yaml"
+ k8s-scone from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }
 
 # Normalize image name (optional — you could also hash it)
@@ -116,10 +116,13 @@ normalize_image_key() {
 declare -A seen_images
 
 register_images() {
-  # Define your image registration function
+  # Remove old manifests - we will regenerate now 
+
+  rm -f "$GENERATED_DIR"/k8s_register_*.yaml
+  rm -f "$GENERATED_DIR/manifest.yaml"  "$GENERATED_DIR/manifest.sanitized.yaml" "$GENERATED_DIR/manifest.session.yaml" 
 
   # Loop through all YAML files
-  FILES_TO_PARSE=$(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest.yaml')
+  FILES_TO_PARSE=$(find "$GENERATED_DIR" -name '*.yaml' ! -name '*initidata*' ! -name 'setup.yaml' ! -name 'manifest*.yaml')
   for file in $FILES_TO_PARSE; do
     [[ -e "$file" ]] || continue
     while IFS= read -r line; do
@@ -195,7 +198,7 @@ register_images
 echo -e "${YELLOW}📦 Bundling all manifests...${NC}"
 cat "$GENERATED_DIR/setup.yaml" > "$MANIFEST_FILE"
 echo "---" >> "$MANIFEST_FILE"
-yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name 'manifest*.yaml' ! -name '*initidata*' ! -name 'setup.yaml') >> "$MANIFEST_FILE"
+yq ea 'select(fileIndex >= 0)' $(find "$GENERATED_DIR" -name '*.yaml' ! -name 'registry*.yaml' ! -name 'manifest*.yaml' ! -name '*initidata*' ! -name 'setup.yaml') >> "$MANIFEST_FILE"
 
 echo -e "${YELLOW}🛡️ Running k8s-scone on $MANIFEST_FILE...${NC}"
 $K8S_SCONE_PATH from -y "$MANIFEST_FILE"
@@ -208,7 +211,7 @@ else
   exit 1
 fi
 
-echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
-docker push "${REPO}:${TAG}-scone"
+# echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
+# docker push "${REPO}:${TAG}-scone"
 
 echo -e "${GREEN}🎉 Confidentialization completed successfully.${NC}"
