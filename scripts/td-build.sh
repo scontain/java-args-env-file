@@ -108,7 +108,7 @@ spec:
   enforce:           ["$BINARY_PATH"] # SGX
   tdx: $TDX_MODE
 EOF
- k8s-scone from -y "$GENERATED_DIR/k8s_register_$key.yaml"
+ $K8S_SCONE_PATH from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }
 
 # Normalize image name (optional — you could also hash it)
