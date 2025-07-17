@@ -35,4 +35,5 @@ spec:
 {{IF_CVM}}
   tdx: true
   kata-config-path: "./confidential/initidata.yaml"
+  compress_kata_config: "gzip"
 {{END_IF}}
