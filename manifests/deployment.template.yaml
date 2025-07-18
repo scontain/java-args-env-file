@@ -19,6 +19,8 @@ spec:
           imagePullPolicy: Always
           command: ["/opt/java/openjdk/bin/java", "Main"]
           args: ["arg1", "arg2"]
+          ports:
+          - containerPort: 9999
           volumeMounts:
             - name: config-volume
               mountPath: /config/configs.yaml
