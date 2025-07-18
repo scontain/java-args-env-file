@@ -5,10 +5,10 @@ version = "0.1.0"
 "aa.toml" = '''
 [token_configs]
 [token_configs.coco_as]
-url = "http://{{CLUSTER_ADDR}}:30080"
+url = "http://{{KBS_ADDR}}:30080"
 
 [token_configs.kbs]
-url = "http://{{CLUSTER_ADDR}}:30080"
+url = "http://{{KBS_ADDR}}:30080"
 '''
 
 "cdh.toml"  = '''
@@ -16,7 +16,7 @@ socket = "unix:///run/confidential-containers/cdh.sock"
 
 [kbc]
 name = "cc_kbc"
-url = "http://{{CLUSTER_ADDR}}:30080"
+url = "http://{{KBS_ADDR}}:30080"
 
 [image]
 authenticated_registry_credentials_uri = "file:///config.json"

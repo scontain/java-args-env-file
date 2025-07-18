@@ -13,6 +13,7 @@ MANIFEST_FILE="$GENERATED_DIR/manifest.yaml"
 MANIFESTS_DIR="$SCRIPT_DIR/../manifests"
 CONFIDENTIAL_DIR="$SCRIPT_DIR/../confidential"
 CLUSTER_ADDR="127.0.0.1"
+KBS_ADDR="127.0.0.1"
 CAS_ADDR="cas.default"
 CVM_MODE=false
 TDX_MODE=false
@@ -39,6 +40,7 @@ Options:
   --k8s-scone-path <path>   Local path to k8s-scone repo (default: $K8S_SCONE_PATH)
   --cas-addr <name.ns>      CAS service to use (default: cas.default)
   --cluster-addr <addr>     Address to remote connect to the CAS (default: $CLUSTER_ADDR)
+  --kbs-addr <addr>         Address to remote connect to the KBS (default: $KBS_ADDR)
   --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
   --split                   Enable split mode (can be used independently of --cvm)
   --help | -h               Show this help message
@@ -56,6 +58,7 @@ substitute_template() {
     -e "s|{{TAG}}|${TAG}|g"
     -e "s|{{PULLSECRET}}|${PULLSECRET:-sconeapps}|g"
     -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g"
+    -e "s|{{KBS_ADDR}}|${KBS_ADDR}|g"
     -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g"
   )
 
@@ -172,6 +175,7 @@ while [[ $# -gt 0 ]]; do
     --k8s-scone-path) K8S_SCONE_PATH="$2"; shift 2 ;;
     --cas-addr) CAS_ADDR="$2"; shift 2 ;;
     --cluster-addr) CLUSTER_ADDR="$2"; shift 2 ;;
+    --kbs-addr) KBS_ADDR="$2"; shift 2 ;;
     --cvm) CVM_MODE=true; TDX_MODE=true; shift ;;
     --split) SPLIT_MODE=true; shift ;;
     --help | -h) print_help; exit 0 ;;
@@ -192,6 +196,11 @@ fi
 # Validate CVM dependencies
 if $CVM_MODE && [[ -z "${CLUSTER_ADDR:-}" ]]; then
   echo -e "${RED}❌ The --cluster-addr flag must be set when using --cvm mode.${NC}"
+  exit 1
+fi
+
+if $CVM_MODE && [[ -z "${KBS_ADDR:-}" ]]; then
+  echo -e "${RED}❌ The --kbs-addr flag must be set when using --cvm mode.${NC}"
   exit 1
 fi
 
