@@ -177,7 +177,7 @@ fi
 # Ensure base manifests exist
 if [[ ! -d "$GENERATED_DIR" ]]; then
   echo -e "${RED}❌ Missing generated folder: $GENERATED_DIR${NC}"
-  echo "💡 Run the base script first to build and generate manifests."
+  echo "💡 Run the build script first to build and generate manifests."
   exit 1
 fi
 
