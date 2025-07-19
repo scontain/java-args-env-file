@@ -54,7 +54,15 @@ You can customize the build process by using command-line options. To see all av
 
 ### Run `td-build.sh`
 
-Confidentialize previously built Docker image and generated Kubernetes manifests:
+Confidentialize previously built Docker image and generated Kubernetes manifests.
+When you run the CAS in the same cluster, you can just execute 
+
+```sh
+# Use --help to explore additional options and usage details
+./scripts/td-build.sh
+```
+
+When you want to use a CAS in a different cluster, you can execute:
 
 ```sh
 # Use --help to explore additional options and usage details
@@ -109,3 +117,25 @@ Delete all Kubernetes resources created from generated manifests and the local f
 ## Showing the secrets
 
 We can decode the Kubernetes secret with the help of script `decode_secret.sh`.
+
+## Monitoring
+
+One can monitor the memory consumption inside of an enclave by setting within the enclave environment
+
+```yaml
+    - { name: SCONE_METRICS, value: "prometheus_port:9999" }
+```
+
+This will activate a metric port for Prometheus to collect memory metrics of the enclave.
+
+For Prometheus to be able to collect this metric, we need to make this metric port available as an Kubernetes endpoint. We can achieve this by executing
+
+```bash
+kubectl apply -f monitoring/metrics_service.yaml
+```
+
+Next, we need to ensure that Prometheus discovers this endpoint. We create a `ServiceMonitor` for our application:
+
+```bash
+kubectl apply -f monitoring/metrics_service.yaml
+```
