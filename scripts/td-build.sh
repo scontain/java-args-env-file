@@ -168,6 +168,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if ! $K8S_SCONE_PATH --help >/dev/null 2>&1; then
+  echo -e "${RED}❌ k8s-scone (path: '$K8S_SCONE_PATH') failed to run${NC}"
+  echo "💡 Please specify the path to k8s-scone using the --k8s-scone-path flag"
+  exit 1
+fi
+
 # Validate CVM dependencies
 if $CVM_MODE && [[ -z "${CLUSTER_ADDR:-}" ]]; then
   echo -e "${RED}❌ The --cluster-addr flag must be set when using --cvm mode.${NC}"
