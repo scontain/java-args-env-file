@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: java-cli-env-reader
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: java-cli-env-reader-metrics # ⚠️ Adjust if needed
+  namespaceSelector:
+    matchNames:
+      - default  # ⚠️ Adjust if your pods/service are in a different namespace
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scheme: http
+      path: "/"
+  fallbackScrapeProtocol: PrometheusText1.0.0

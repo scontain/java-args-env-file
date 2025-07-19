@@ -8,6 +8,7 @@ PULLSECRET="sconeapps"
 NAMESPACE=""
 NO_CACHE=false
 BUNDLE_MANIFESTS=false
+DOCKERFILE="Dockerfile"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -32,6 +33,7 @@ Options:
   --namespace, -n <ns>  Kubernetes namespace to inject into manifests (default: '$NAMESPACE')
   --no-cache            Disable Docker build cache (force image rebuild)
   --bundle-manifests    Bundle the Manifests into one yaml file ('$(realpath "$SCRIPT_DIR/../generated/manifest.yaml")')
+  --alpine              Use Alpine base image for the application image
   --help                Show this help message
 
 
@@ -119,6 +121,10 @@ while [[ $# -gt 0 ]]; do
     BUNDLE_MANIFESTS=true
     shift
     ;;
+  --alpine)
+    DOCKERFILE="Dockerfile.alpine"
+    shift
+    ;;
   --help | -h)
     print_help
     exit 0
@@ -144,7 +150,7 @@ done
 echo "📦 Building Docker image: $REPO:$TAG"
 BUILD_ARGS=()
 $NO_CACHE && BUILD_ARGS+=(--no-cache --pull)
-docker build "${BUILD_ARGS[@]}" --quiet -t "${REPO}:${TAG}" -f $SCRIPT_DIR/../Dockerfile $SCRIPT_DIR/../
+docker build "${BUILD_ARGS[@]}" --quiet -t "${REPO}:${TAG}" -f $SCRIPT_DIR/../${DOCKERFILE} $SCRIPT_DIR/../
 
 echo "🚀 Pushing image to $REPO:$TAG"
 docker push "${REPO}:${TAG}"
