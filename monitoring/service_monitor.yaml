@@ -15,4 +15,4 @@ spec:
       interval: 30s
       scheme: http
       path: "/"
-  fallbackScrapeProtocol: PrometheusText1.0.0
+  fallbackScrapeProtocol: PrometheusText0.0.4
