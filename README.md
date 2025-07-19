@@ -52,6 +52,14 @@ You can customize the build process by using command-line options. To see all av
 ./scripts/build.sh --help
 ```
 
+To produce smaller images, you can create the application an Alpine instead:
+
+```sh
+./scripts/build.sh --alpine
+```
+
+Note that CVMs on some cloud providers are sensitive to pulling large images from remote registries. Hence, using small images helps to reduce the startup times and avoid timeouts because of long image pull times.
+
 ### Run `td-build.sh`
 
 Confidentialize previously built Docker image and generated Kubernetes manifests.
@@ -62,27 +70,70 @@ When you run the CAS in the same cluster, you can just execute
 ./scripts/td-build.sh
 ```
 
-When you want to use a CAS in a different cluster, you can execute:
+### Split Deployment
+
+We talk about a **split deploymen** when you run the application in one Kubernetes cluster and the SCONE CAS in a different cluster. The cluster could even run in different clouds.
+
+To use CAS in a different cluster, we assume that you have two Kubernetes contexts:
+
+- context `cvm` runs the CVMs, and
+- context `cas` runs the SCONE CAS.
+
+We check that these two clusters exists as follows:
 
 ```sh
+if kubectl config get-contexts -o name | grep -q '^cas$'; then
+  echo "Context 'cas' exists"
+else
+  echo "ERROR: Context 'cas' not exist"
+  exit 1
+fi
+if kubectl config get-contexts -o name | grep -q '^cvm$'; then
+  echo "Context 'cvm' exists"
+else
+  echo "ERROR: Context 'cvm' not exist"
+  exit 1
+fi
+```
+
+You can merge two configs as follows:
+
+```sh
+CVM_KONTEXT=$(realpath ~/.kube/cvm-context)
+CAS_KONTEXT=$(realpath ~/.kube/cas-context)
+mv ~/.kube/config-cvm-cas ~/.kube/config-cvm-cas.bak || true
+KUBECONFIG="$CVM_KONTEXT" C_CVM_KONTEXT=$(kubectl config current-context)
+KUBECONFIG="$CAS_KONTEXT" C_CAS_KONTEXT=$(kubectl config current-context)
+echo "C_CVM_KONTEXT=$C_CVM_KONTEXT C_CAS_KONTEXT=$C_CAS_KONTEXT"
+
+KUBECONFIG="$CVM_KONTEXT:$CAS_KONTEXT" kubectl config view --flatten > ~/.kube/config-cvm-cas
+export KUBECONFIG=$(realpath ~/.kube/config-cvm-cas)
+kubectl config rename-context $C_CVM_KONTEXT cvm
+kubectl config rename-context $C_CAS_KONTEXT cas
+kubectl config view
+```
+
+```sh
+kubectl config set-context cas
 # Use --help to explore additional options and usage details
-./scripts/td-build.sh --cas-addr cas.scone-system --split
+./scripts/td-build.sh --cas-addr cas-ext.default --cluster-addr cas-ext.sconecloud.de --kbs-addr kbs.sconecloud.de --cvm --split --permissive
 ```
 
 > **Note:** Before running this script, make sure your `kubeconfig` is configured to point to the target SGX-enabled Kubernetes cluster. Also, make sure to set the `--cluster-addr` according to your environment, using the correct `name.namespace` format that matches your CAS deployment.
 
 ### Run `deploy.sh`
 
-Apply the generated encrypted policies:
+Apply the generated encrypted policies (in the SGX-enabled cluster):
 
 ```sh
-kubectl apply -f generated/manifest.sanitized.enc.yaml
+kubectl --context=cas apply -f generated/manifest.sanitized.enc.yaml
 ```
 
 Then deploy the workload using:
 
 ```sh
-kubectl apply -f generated/manifest.sanitized.yaml 
+kubectl --context=cvm apply -f generated/manifest.sanitized.yaml 
+watch kubectl --context=cvm get pods
 ```
 
 > **Note:** If your container images are stored in a private registry, you must create a Kubernetes secret to allow image pulling:
@@ -107,7 +158,13 @@ Streams logs from the pod created by the Kubernetes Job: java-cli-env-reader.
 
 ### Cleanup
 
-Delete all Kubernetes resources created from generated manifests and the local files:
+To stop the application, you can delete its `deployment`:
+
+```bash
+kubectl delete deployment java-cli-env-reader
+```
+
+To delete all Kubernetes resources created from generated manifests and the local files, execute:
 
 ```sh
 # Use --help to explore additional options and usage details

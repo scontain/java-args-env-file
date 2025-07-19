@@ -20,6 +20,7 @@ TDX_MODE=false
 SPLIT_MODE=false
 APP_LABEL="arg-env"
 BINARY_PATH="/opt/java/openjdk/bin/java"
+export PERMISSIVE_MODE="false"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -43,6 +44,7 @@ Options:
   --kbs-addr <addr>         Address to remote connect to the KBS (default: $KBS_ADDR)
   --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
   --split                   Enable split mode (can be used independently of --cvm)
+  --permissive              Less strict regarding attestation of workloads
   --help | -h               Show this help message
 
 ⚠️  NOTE: You must run the first script with --bundle-manifests flag BEFORE this to build and generate manifests.
@@ -60,6 +62,7 @@ substitute_template() {
     -e "s|{{CLUSTER_ADDR}}|${CLUSTER_ADDR}|g"
     -e "s|{{KBS_ADDR}}|${KBS_ADDR}|g"
     -e "s|{{CAS_ADDR}}|${CAS_ADDR}|g"
+    -e "s|{{PERMISSIVE_MODE}}|${PERMISSIVE_MODE}|g"
   )
 
   if [[ -n "${NAMESPACE:-}" ]]; then
@@ -178,6 +181,7 @@ while [[ $# -gt 0 ]]; do
     --kbs-addr) KBS_ADDR="$2"; shift 2 ;;
     --cvm) CVM_MODE=true; TDX_MODE=true; shift ;;
     --split) SPLIT_MODE=true; shift ;;
+    --permissive) export PERMISSIVE_MODE="true"; shift ;;
     --help | -h) print_help; exit 0 ;;
     *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac
