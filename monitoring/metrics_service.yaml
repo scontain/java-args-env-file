@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-cli-env-reader-metrics
+  namespace: default
+  labels:
+    app: java-cli-env-reader-metrics
+spec:
+  selector:
+    app: java-cli-env-reader   # Matches the pod label
+  ports:
+    - port: 9999              # Port exposed by the service
+      targetPort: metrics      # Port used inside the pod
+      name: metrics
+  type: ClusterIP           # Can also be NodePort or LoadBalancer
+

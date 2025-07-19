@@ -21,6 +21,8 @@ spec:
           args: ["arg1", "arg2"]
           ports:
           - containerPort: 9999
+            name: metrics
+            protocol: TCP
           volumeMounts:
             - name: config-volume
               mountPath: /config/configs.yaml
