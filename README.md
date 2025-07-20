@@ -70,6 +70,19 @@ When you run the CAS in the same cluster, you can just execute
 ./scripts/td-build.sh
 ```
 
+In case there are any vulnerabilities in the cluster, attestation will fail. Please add flag `--permissive` to build the application again.
+
+```sh
+# Use --help to explore additional options and usage details
+./scripts/td-build.sh --permissive
+```
+
+Deploy the application by executing
+
+```bash
+kubectl apply -f generated/manifests.sanitized.yaml
+```
+
 ### Split Deployment
 
 We talk about a **split deploymen** when you run the application in one Kubernetes cluster and the SCONE CAS in a different cluster. The cluster could even run in different clouds.
@@ -121,7 +134,7 @@ kubectl config set-context cas
 
 > **Note:** Before running this script, make sure your `kubeconfig` is configured to point to the target SGX-enabled Kubernetes cluster. Also, make sure to set the `--cluster-addr` according to your environment, using the correct `name.namespace` format that matches your CAS deployment.
 
-### Run `deploy.sh`
+### Deploying in two clusters
 
 Apply the generated encrypted policies (in the SGX-enabled cluster):
 
