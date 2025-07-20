@@ -21,6 +21,7 @@ SPLIT_MODE=false
 APP_LABEL="arg-env"
 BINARY_PATH="/opt/java/openjdk/bin/java"
 export PERMISSIVE_MODE="false"
+TAG_EXTENSION=""
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -45,6 +46,7 @@ Options:
   --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
   --split                   Enable split mode (can be used independently of --cvm)
   --permissive              Less strict regarding attestation of workloads
+  --alpine                  Use Alpine base image for the application image
   --help | -h               Show this help message
 
 ⚠️  NOTE: You must run the first script with --bundle-manifests flag BEFORE this to build and generate manifests.
@@ -100,7 +102,7 @@ register_image() {
   local key="$1"
   local image="$2"
   transformed=${image/@sha256:/:}
-  native="eclipse-temurin:17-jre"
+  native="eclipse-temurin:17-jre$TAG_EXTENSION"
   echo "🔧 Registering image: $image as $transformed"
   docker tag "$image" "$transformed"
   cat > "$GENERATED_DIR/k8s_register_$key.yaml" <<EOF
@@ -182,6 +184,7 @@ while [[ $# -gt 0 ]]; do
     --cvm) CVM_MODE=true; TDX_MODE=true; shift ;;
     --split) SPLIT_MODE=true; shift ;;
     --permissive) export PERMISSIVE_MODE="true"; shift ;;
+    --alpine) TAG_EXTENSION="-alpine"; shift ;;
     --help | -h) print_help; exit 0 ;;
     *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac
