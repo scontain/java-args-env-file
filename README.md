@@ -1,7 +1,19 @@
 # Java Tutorial
 
-This is a simple tutorial on how to convert a very basic cloud-native application into a confidential cloud-native application.
-We use a simple Java program to demonstrate the steps.
+This is a simple tutorial on how to convert a very basic cloud-native application into a confidential cloud-native application. This example runs on different CPUs:
+
+ - Intel SGX, 
+ - Intel TDX, and
+ - AMD SEV SNP 
+
+and on different cloud providers: 
+
+- Microsoft Azure, 
+- Google Cloud, 
+- AWS, and 
+- [Telekom OSC](https://www.t-systems.com/de/de/souveraene-cloud/loesungen/open-sovereign-cloud).
+
+We use a simple Java program to demonstrate the steps. We include slide decks to explain the different steps and screencasts to demonstrate the execution of the different steps. To run the code yourself, you need to get access to the **production** container images on [`registry.scontain.com`](gitlab.scontain.com). 
 
 ## Java Application
 
@@ -16,6 +28,10 @@ The Java program:
 - Deploy the Java application.
 - Mount a ConfigMap to /config/configs.yaml.
 - Mount a Secret to /config/secrets.
+
+For more details, see the following slide deck: 
+
+[![Introduction Native Application](./docs/Java-Tutorial-Native-Version.jpg)](docs/Java-Tutorial-Native-Version.pdf)
 
 ## Prerequisites
 
@@ -34,23 +50,26 @@ The following scrips that are found in the `scripts` directory:
 - `show_logs.sh`: show the log of the pod
 - `cleanup.sh`:  removes all resources
 
+For more details, see the following slide deck: 
+
+[![Clone and Build Native Application](./docs/running-the-native-java-app.png)](docs/running-the-native-java-app.pdf)
 
 ### Run `build.sh`
 
 Run the following script to build the container image and generate the Kubernetes manifests:
 
 ```sh
-# example: registry.scontain.com/workshop/java-cli-env-reader
-./scripts/build.sh --repo your-registry-url/your-namespace/java-cli-env-reader
+# example: ./scripts/build.sh --repo registry.scontain.com/workshop/java-cli-env-reader
+./scripts/build.sh --repo your-registry-url/your-repo/java-cli-env-reader
 ```
-
-> **Note:** Tag is added using `--tag <tag>`
 
 You can customize the build process by using command-line options. To see all available options:
 
 ```sh
 ./scripts/build.sh --help
 ```
+
+> **Example:** By default, we use image tag `latest`. You can set the tag using option  `--tag <tag>`
 
 To produce smaller images, you can create the application an Alpine instead:
 
@@ -60,9 +79,39 @@ To produce smaller images, you can create the application an Alpine instead:
 
 Note that CVMs on some cloud providers are sensitive to pulling large images from remote registries. Hence, using small images helps to reduce the startup times and avoid timeouts because of long image pull times.
 
-### Run `td-build.sh`
+Screencast of building the native application:
 
-Confidentialize previously built Docker image and generated Kubernetes manifests.
+![Building Native Application](docs/build.svg)
+
+### Run `deploy.sh`
+
+You can deploy the native application with the help of script `deploy.sh`:
+
+
+![Deploying Native Application](docs/deploy.svg)
+
+### Threat Model
+
+In a first approximation, 
+
+- we cannot trust any person that has access to the computing infrastructure, and
+- we cannot trust hardware and software components unless we securely measured the components and the measured values match our expected values.
+
+For more details, see the following slide deck: 
+
+[![Introduction Native Application](./docs/Java-App-Threat-Model.png)](docs/Java-App-Threat-Model.pdf)
+
+
+
+### Trust Domain Build `td-build.sh`
+
+We transform previously built Docker image and generated Kubernetes manifests using the **SCONE TD Build Service**.
+
+For more details, see the following slide deck: 
+
+[![TDBuildService](./docs/TDBuildService.png)](docs/SCONE-TD-Build-Service.pdf)
+
+
 When you run the CAS in the same cluster, you can just execute 
 
 ```sh
@@ -77,15 +126,28 @@ In case there are any vulnerabilities in the cluster, attestation will fail. Ple
 ./scripts/td-build.sh --permissive
 ```
 
-Deploy the application by executing
+Screencast of transforming the native application into a confidential application:
+
+![Building the Confidential Application](docs/td-build.svg)
+
+### Confidential Deployment
+
+Deploy the confidential application by executing
 
 ```bash
 kubectl apply -f generated/manifests.sanitized.yaml
 ```
 
+Screencast of deploying the confidential application:
+
+![Deploying the confidential Application](docs/td-deploy.svg)
+
+
 ### Split Deployment
 
-We talk about a **split deploymen** when you run the application in one Kubernetes cluster and the SCONE CAS in a different cluster. The cluster could even run in different clouds.
+![Split Operation](docs/SplitOperation.png)
+
+We talk about a **split deployment** when you run the application in one Kubernetes cluster and the SCONE CAS in a different cluster. The cluster could even run in different clouds.
 
 To use CAS in a different cluster, we assume that you have two Kubernetes contexts:
 
