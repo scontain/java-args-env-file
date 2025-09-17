@@ -26,6 +26,5 @@ pe "# let's look at the output of the confidential application:"
 pe "# - to show that it works as expected, the application prints the env vars "
 pe "#   and the content of the injected file"
 pe "# - note that a confidential application would normally not print this info!"
-pe 'kubectl logs -l app=java-cli-env-reader'
-pe 'timeout 6m kubectl logs -l app=java-cli-env-reader --follow || true'
+pe 'timeout 2m kubectl logs -l app=java-cli-env-reader --follow || true'
 pe '# DONE'
