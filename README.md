@@ -135,7 +135,7 @@ Screencast of transforming the native application into a confidential applicatio
 Deploy the confidential application by executing
 
 ```bash
-kubectl apply -f generated/manifests.sanitized.yaml
+kubectl apply -f generated/manifest.sanitized.yaml
 ```
 
 Screencast of deploying the confidential application:
