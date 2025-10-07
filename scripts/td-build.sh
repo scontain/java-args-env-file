@@ -20,6 +20,7 @@ TDX_MODE=false
 SPLIT_MODE=false
 APP_LABEL="arg-env"
 BINARY_PATH="/opt/java/openjdk/bin/java"
+VERSION="5.10.0-rc.5"
 export PERMISSIVE_MODE="false"
 TAG_EXTENSION=""
 
@@ -47,6 +48,7 @@ Options:
   --split                   Enable split mode (can be used independently of --cvm)
   --permissive              Less strict regarding attestation of workloads
   --alpine                  Use Alpine base image for the application image
+  --version <ver>           Scone version to use (default: latest available)
   --help | -h               Show this help message
 
 ⚠️  NOTE: You must run the first script with --bundle-manifests flag BEFORE this to build and generate manifests.
@@ -113,7 +115,9 @@ metadata:
 spec:
   protected_image:   $transformed
   unprotected_image: $native # SGX
+  destination_image: $transformed-scone
   enforce:           ["$BINARY_PATH"] # SGX
+  version: $VERSION
   tdx: $TDX_MODE
 EOF
  $K8S_SCONE_PATH from -y "$GENERATED_DIR/k8s_register_$key.yaml"
@@ -185,6 +189,7 @@ while [[ $# -gt 0 ]]; do
     --split) SPLIT_MODE=true; shift ;;
     --permissive) export PERMISSIVE_MODE="true"; shift ;;
     --alpine) TAG_EXTENSION="-alpine"; shift ;;
+    --version) VERSION="$2"; shift 2 ;;
     --help | -h) print_help; exit 0 ;;
     *) echo -e "${RED}❌ Unknown option: $1${NC}"; print_help; exit 1 ;;
   esac
