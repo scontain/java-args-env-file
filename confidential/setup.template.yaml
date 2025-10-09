@@ -13,6 +13,7 @@ spec:
   unique_app_id: scgz45kf51
   output_manifest_file: "./generated/manifest.sanitized.yaml"
   output_session_file: "./generated/manifest.session.yaml"
+  spol: true
   cas_address:
     address: {{CAS_ADDR}} # default: cas.default
   manifest_env:

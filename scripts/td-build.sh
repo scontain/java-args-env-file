@@ -119,6 +119,8 @@ spec:
   enforce:           ["$BINARY_PATH"] # SGX
   version: $VERSION
   tdx: $TDX_MODE
+  manifest_env:
+    - { name: SCONE_KEY,  value: "identity.pem" }
 EOF
  $K8S_SCONE_PATH from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }
