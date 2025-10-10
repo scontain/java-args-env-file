@@ -20,7 +20,7 @@ TDX_MODE=false
 SPLIT_MODE=false
 APP_LABEL="arg-env"
 BINARY_PATH="/opt/java/openjdk/bin/java"
-VERSION="5.10.0-rc.5"
+VERSION="6.1.0-rc.0"
 export PERMISSIVE_MODE="false"
 TAG_EXTENSION=""
 
@@ -121,6 +121,7 @@ spec:
   tdx: $TDX_MODE
   manifest_env:
     - { name: SCONE_KEY,  value: "identity.pem" }
+    - { name: SCONE_SYSLIBS, value: "1" }
 EOF
  $K8S_SCONE_PATH from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }
