@@ -5,7 +5,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND"' ERR
 
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
-TAG="latest"
+TAG=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace) || TAG="latest"
 K8S_SCONE_PATH=""
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 GENERATED_DIR="$SCRIPT_DIR/../generated"

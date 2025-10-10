@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
-TAG="latest"
+TAG=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace) || TAG="latest"
 PULLSECRET="sconeapps"
 NAMESPACE=""
 NO_CACHE=false
