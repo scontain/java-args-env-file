@@ -115,7 +115,6 @@ metadata:
 spec:
   protected_image:   $transformed
   unprotected_image: $native # SGX
-  destination_image: $transformed-scone
   enforce:           ["$BINARY_PATH"] # SGX
   version: $VERSION
   tdx: $TDX_MODE
