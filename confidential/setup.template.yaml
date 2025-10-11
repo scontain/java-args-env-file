@@ -13,20 +13,26 @@ spec:
   unique_app_id: scgz45kf51
   output_manifest_file: "./generated/manifest.sanitized.yaml"
   output_session_file: "./generated/manifest.session.yaml"
+{{IF_SCONE_ENCLAVE}}
+  las_key: "8b51f3b24cd4c59841000b68b34cafc43030f20f77c7b5371b7246c13394d718" # demo key without KBS
+  scone_enclave: true
+{{END_SCONE_ENCLAVE}}
   cas_address:
     address: {{CAS_ADDR}} # default: cas.default
   manifest_env:
     - { name: SCONE_VERSION,  value: "1" }
-    - { name: SCONE_LOG,      value: "FATAL" }
-    - { name: SCONE_HEAP,     value: "2G" }
+    - { name: SCONE_LOG,      value: "WARNING" }
+    - { name: SCONE_HEAP,     value: "6G" }
     - { name: SCONE_ALLOW_DLOPEN, value: "2" }
     - { name: SCONE_EDMM_MODE, value: "auto" }
     - { name: SCONE_SYSLIBS, value: "1" }
-    - { name: SCONE_MODE, value: "auto" }
 {{IF_CVM}}
     - { name: SCONE_CAS_ADDR, value: {{CLUSTER_ADDR}} }
 {{END_IF}}
-
+{{IF_SCONE_ENCLAVE}}
+    - { name: SCONE_MODE, value: "cvm" }
+    - { name: SCONE_PRODUCTION, value: "0" }
+{{END_SCONE_ENCLAVE}}
   session_env:
     - { name: LD_LIBRARY_PATH, value: /opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib }
     - { name: SCONE_METRICS, value: "prometheus_port:9999" }

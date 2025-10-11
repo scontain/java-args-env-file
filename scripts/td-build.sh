@@ -5,7 +5,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND"' ERR
 
 # Defaults
 REPO="registry.scontain.com/workshop/java-cli-env-reader"
-TAG="latest"
+TAG=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace) || TAG="latest"
 K8S_SCONE_PATH=""
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 GENERATED_DIR="$SCRIPT_DIR/../generated"
@@ -16,6 +16,7 @@ CLUSTER_ADDR="127.0.0.1"
 KBS_ADDR="127.0.0.1"
 CAS_ADDR="cas.default"
 CVM_MODE=false
+SCONE_ENCLAVE=false
 TDX_MODE=false
 SPLIT_MODE=false
 APP_LABEL="arg-env"
@@ -43,6 +44,7 @@ Options:
   --cas-addr <name.ns>      CAS service to use (default: cas.default)
   --cluster-addr <addr>     Address to remote connect to the CAS (default: $CLUSTER_ADDR)
   --kbs-addr <addr>         Address to remote connect to the KBS (default: $KBS_ADDR)
+  --scone-enclave           Enable SCONE_ENCLAVE mode (unlocks SCONE_ENCLAVE-related fields in templates)
   --cvm                     Enable CVM/TDX mode (unlocks TDX-related fields in templates)
   --split                   Enable split mode (can be used independently of --cvm)
   --permissive              Less strict regarding attestation of workloads
@@ -91,6 +93,20 @@ substitute_template() {
     # Remove entire blocks between markers (inclusive)
     sed_expr+=(
       -e "/{{IF_CVM}}/,/{{END_IF}}/d"
+    )
+  fi
+
+  # Handle SCONE_ENCLAVE mode
+  if $SCONE_ENCLAVE; then
+    # Delete only the markers, keep the lines inside the block
+    sed_expr+=(
+      -e "/{{IF_SCONE_ENCLAVE}}/d"
+      -e "/{{END_SCONE_ENCLAVE}}/d"
+    )
+  else
+    # Remove entire blocks between markers (inclusive)
+    sed_expr+=(
+      -e "/{{IF_SCONE_ENCLAVE}}/,/{{END_SCONE_ENCLAVE}}/d"
     )
   fi
 
@@ -176,6 +192,7 @@ while [[ $# -gt 0 ]]; do
     --repo) REPO="$2"; shift 2 ;;
     --tag) TAG="$2"; shift 2 ;;
     --namespace | -n) NAMESPACE="$2"; shift 2 ;;
+    --scone-enclave) TDX_MODE=true; SCONE_ENCLAVE=true;  export PERMISSIVE_MODE="true"; shift ;;
     --pullsecret) PULLSECRET="$2"; shift 2 ;;
     --k8s-scone-path) K8S_SCONE_PATH="$2"; shift 2 ;;
     --cas-addr) CAS_ADDR="$2"; shift 2 ;;
@@ -248,7 +265,7 @@ else
   exit 1
 fi
 
-# echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
-# docker push "${REPO}:${TAG}-scone"
+#echo -e "${YELLOW}🚀 Pushing image: ${REPO}:${TAG}-scone${NC}"
+#docker push "${REPO}:${TAG}-scone"
 
 echo -e "${GREEN}🎉 Confidentialization completed successfully.${NC}"
