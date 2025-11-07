@@ -130,7 +130,7 @@ spec:
   protected_image:   $transformed
   unprotected_image: $native # SGX
   enforce:           ["$BINARY_PATH"] # SGX
-  tdx: $TDX_MODE
+  cvm: $TDX_MODE
 EOF
  $K8S_SCONE_PATH from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }

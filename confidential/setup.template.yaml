@@ -39,7 +39,7 @@ spec:
   permissive: {{PERMISSIVE_MODE}}
   {{SPLIT}}
 {{IF_CVM}}
-  tdx: true
+  cvm: true
   kata_config_path: "./generated/initidata.yaml"
   compress_kata_config: "Gzip"
 {{END_IF}}
