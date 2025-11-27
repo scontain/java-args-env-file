@@ -16,6 +16,7 @@ spec:
 {{IF_SCONE_ENCLAVE}}
   las_key: "8b51f3b24cd4c59841000b68b34cafc43030f20f77c7b5371b7246c13394d718" # demo key without KBS
   scone_enclave: true
+  cvm: true
 {{END_SCONE_ENCLAVE}}
   cas_address:
     address: {{CAS_ADDR}} # default: cas.default
@@ -30,7 +31,6 @@ spec:
     - { name: SCONE_CAS_ADDR, value: {{CLUSTER_ADDR}} }
 {{END_IF}}
 {{IF_SCONE_ENCLAVE}}
-    - { name: SCONE_MODE, value: "cvm" }
     - { name: SCONE_PRODUCTION, value: "0" }
 {{END_SCONE_ENCLAVE}}
   session_env:
@@ -39,7 +39,7 @@ spec:
   permissive: {{PERMISSIVE_MODE}}
   {{SPLIT}}
 {{IF_CVM}}
-  tdx: true
+  cvm: true
   kata_config_path: "./generated/initidata.yaml"
   compress_kata_config: "Gzip"
 {{END_IF}}

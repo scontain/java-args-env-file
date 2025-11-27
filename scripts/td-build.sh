@@ -130,7 +130,14 @@ spec:
   protected_image:   $transformed
   unprotected_image: $native # SGX
   enforce:           ["$BINARY_PATH"] # SGX
-  tdx: $TDX_MODE
+  cvm: $TDX_MODE
+  manifest_env:
+    - { name: SCONE_VERSION,  value: "1" }
+    - { name: SCONE_LOG,      value: "WARNING" }
+    - { name: SCONE_HEAP,     value: "6G" }
+    - { name: SCONE_ALLOW_DLOPEN, value: "2" }
+    - { name: SCONE_EDMM_MODE, value: "auto" }
+    - { name: SCONE_SYSLIBS, value: "1" }
 EOF
  $K8S_SCONE_PATH from -y "$GENERATED_DIR/k8s_register_$key.yaml"
 }
