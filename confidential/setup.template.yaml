@@ -3,7 +3,6 @@ apiVersion: scone.cloud/v1
 kind: Apply
 metadata:
   name: arg-env
-{{NAMESPACE}}
 spec:
   # Inline‑selection: pick *only* the Deployment
   label:
